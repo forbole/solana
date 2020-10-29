@@ -231,7 +231,7 @@ fn get_config() -> Config {
         bonus_stake_amount,
         delinquent_grace_slot_distance: 21600, // ~24 hours worth of slots at 2.5 slots per second
         quality_block_producer_percentage,
-        max_poor_block_productor_percentage: 20,
+        max_poor_block_productor_percentage: 100,
         address_labels: config.address_labels,
     };
 
@@ -626,160 +626,15 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         )
         .unwrap();
 
-        // Transactions to create the baseline and bonus stake accounts
-        if let Ok((balance, stake_state)) = get_stake_account(&rpc_client, &baseline_stake_address)
-        {
-            if balance != config.baseline_stake_amount {
-                info!(
-                    "Unexpected balance in stake account {}: {}, expected {}",
-                    baseline_stake_address, balance, config.baseline_stake_amount
-                );
-            }
-            if let Some(delegation) = stake_state.delegation() {
-                if epoch_info.epoch == delegation.activation_epoch {
-                    stake_activated_in_current_epoch.insert(baseline_stake_address);
-                }
-            }
-        } else {
-            info!(
-                "Need to create baseline stake account for validator {}",
-                formatted_node_pubkey
-            );
-            source_stake_lamports_required += config.baseline_stake_amount;
-            create_stake_transactions.push((
-                Transaction::new_unsigned(Message::new(
-                    &stake_instruction::split_with_seed(
-                        &config.source_stake_address,
-                        &config.authorized_staker.pubkey(),
-                        config.baseline_stake_amount,
-                        &baseline_stake_address,
-                        &config.authorized_staker.pubkey(),
-                        baseline_seed,
-                    ),
-                    Some(&config.authorized_staker.pubkey()),
-                )),
-                format!(
-                    "Creating baseline stake account for validator {} ({})",
-                    formatted_node_pubkey, baseline_stake_address
-                ),
-            ));
-        }
-
-        if let Ok((balance, stake_state)) = get_stake_account(&rpc_client, &bonus_stake_address) {
-            if balance != config.bonus_stake_amount {
-                info!(
-                    "Unexpected balance in stake account {}: {}, expected {}",
-                    bonus_stake_address, balance, config.bonus_stake_amount
-                );
-            }
-            if let Some(delegation) = stake_state.delegation() {
-                if epoch_info.epoch == delegation.activation_epoch {
-                    stake_activated_in_current_epoch.insert(bonus_stake_address);
-                }
-            }
-        } else {
-            info!(
-                "Need to create bonus stake account for validator {}",
-                formatted_node_pubkey
-            );
-            source_stake_lamports_required += config.bonus_stake_amount;
-            create_stake_transactions.push((
-                Transaction::new_unsigned(Message::new(
-                    &stake_instruction::split_with_seed(
-                        &config.source_stake_address,
-                        &config.authorized_staker.pubkey(),
-                        config.bonus_stake_amount,
-                        &bonus_stake_address,
-                        &config.authorized_staker.pubkey(),
-                        bonus_seed,
-                    ),
-                    Some(&config.authorized_staker.pubkey()),
-                )),
-                format!(
-                    "Creating bonus stake account for validator {} ({})",
-                    formatted_node_pubkey, bonus_stake_address
-                ),
-            ));
-        }
-
-        // Validator is not considered delinquent if its root slot is less than 256 slots behind the current
+        // Validator is considered delinquent if its root slot is less than delinquent_grace_slot_distance( 21600 ) slots behind the current
         // slot.  This is very generous.
-        if *root_slot > epoch_info.absolute_slot - 256 {
-            datapoint_info!(
-                "validator-status",
-                ("cluster", config.cluster, String),
-                ("id", node_pubkey.to_string(), String),
-                ("slot", epoch_info.absolute_slot, i64),
-                ("ok", true, bool)
-            );
-
-            // Delegate baseline stake
-            if !stake_activated_in_current_epoch.contains(&baseline_stake_address) {
-                delegate_stake_transactions.push((
-                    Transaction::new_unsigned(Message::new(
-                        &[stake_instruction::delegate_stake(
-                            &baseline_stake_address,
-                            &config.authorized_staker.pubkey(),
-                            &vote_pubkey,
-                        )],
-                        Some(&config.authorized_staker.pubkey()),
-                    )),
-                    format!(
-                        "🥩 `{}` is current. Added ◎{} baseline stake",
-                        formatted_node_pubkey,
-                        lamports_to_sol(config.baseline_stake_amount),
-                    ),
-                ));
-            }
-
-            if !too_many_poor_block_producers {
-                if quality_block_producers.contains(&node_pubkey) {
-                    // Delegate bonus stake
-                    if !stake_activated_in_current_epoch.contains(&bonus_stake_address) {
-                        delegate_stake_transactions.push((
-                        Transaction::new_unsigned(
-                        Message::new(
-                            &[stake_instruction::delegate_stake(
-                                &bonus_stake_address,
-                                &config.authorized_staker.pubkey(),
-                                &vote_pubkey,
-                            )],
-                            Some(&config.authorized_staker.pubkey()),
-                        )),
-                        format!(
-                            "🏅 `{}` was a quality block producer during epoch {}. Added ◎{} bonus stake",
-                            formatted_node_pubkey,
-                            last_epoch,
-                            lamports_to_sol(config.bonus_stake_amount),
-                        ),
-                    ));
-                    }
-                } else {
-                    // Deactivate bonus stake
-                    delegate_stake_transactions.push((
-                    Transaction::new_unsigned(
-                    Message::new(
-                        &[stake_instruction::deactivate_stake(
-                            &bonus_stake_address,
-                            &config.authorized_staker.pubkey(),
-                        )],
-                        Some(&config.authorized_staker.pubkey()),
-                    )),
-                    format!(
-                        "💔 `{}` was a poor block producer during epoch {}. Removed ◎{} bonus stake",
-                        formatted_node_pubkey,
-                        last_epoch,
-                        lamports_to_sol(config.bonus_stake_amount),
-                    ),
-                ));
-                }
-            }
-        } else {
-            // Destake the validator if it has been delinquent for longer than the grace period
-            if *root_slot
-                < epoch_info
-                    .absolute_slot
-                    .saturating_sub(config.delinquent_grace_slot_distance)
+        if *root_slot
+            < epoch_info
+                .absolute_slot
+                .saturating_sub(config.delinquent_grace_slot_distance)
+        {
+            if let Ok((_balance, _stake_state)) =
+                get_stake_account(&rpc_client, &baseline_stake_address)
             {
                 // Deactivate baseline stake
                 delegate_stake_transactions.push((
@@ -820,15 +675,157 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     ("slot", epoch_info.absolute_slot, i64),
                     ("ok", false, bool)
                 );
+            }
+        } else {
+            // The validator is still considered current for the purposes of metrics reporting,
+            datapoint_info!(
+                "validator-status",
+                ("cluster", config.cluster, String),
+                ("id", node_pubkey.to_string(), String),
+                ("slot", epoch_info.absolute_slot, i64),
+                ("ok", true, bool)
+            );
+
+            // Transactions to create the baseline
+            if let Ok((balance, stake_state)) =
+                get_stake_account(&rpc_client, &baseline_stake_address)
+            {
+                if balance != config.baseline_stake_amount {
+                    info!(
+                        "Unexpected balance in stake account {}: {}, expected {}",
+                        baseline_stake_address, balance, config.baseline_stake_amount
+                    );
+                }
+                if let Some(delegation) = stake_state.delegation() {
+                    if epoch_info.epoch == delegation.activation_epoch {
+                        stake_activated_in_current_epoch.insert(baseline_stake_address);
+                    }
+                }
             } else {
-                // The validator is still considered current for the purposes of metrics reporting,
-                datapoint_info!(
-                    "validator-status",
-                    ("cluster", config.cluster, String),
-                    ("id", node_pubkey.to_string(), String),
-                    ("slot", epoch_info.absolute_slot, i64),
-                    ("ok", true, bool)
+                info!(
+                    "Need to create baseline stake account for validator {}",
+                    formatted_node_pubkey
                 );
+                source_stake_lamports_required += config.baseline_stake_amount;
+                create_stake_transactions.push((
+                    Transaction::new_unsigned(Message::new(
+                        &stake_instruction::split_with_seed(
+                            &config.source_stake_address,
+                            &config.authorized_staker.pubkey(),
+                            config.baseline_stake_amount,
+                            &baseline_stake_address,
+                            &config.authorized_staker.pubkey(),
+                            baseline_seed,
+                        ),
+                        Some(&config.authorized_staker.pubkey()),
+                    )),
+                    format!(
+                        "Creating baseline stake account for validator {} ({})",
+                        formatted_node_pubkey, baseline_stake_address
+                    ),
+                ));
+            }
+
+            // Delegate baseline stake
+            if !stake_activated_in_current_epoch.contains(&baseline_stake_address) {
+                delegate_stake_transactions.push((
+                    Transaction::new_unsigned(Message::new(
+                        &[stake_instruction::delegate_stake(
+                            &baseline_stake_address,
+                            &config.authorized_staker.pubkey(),
+                            &vote_pubkey,
+                        )],
+                        Some(&config.authorized_staker.pubkey()),
+                    )),
+                    format!(
+                        "🥩 `{}` is current. Added ◎{} baseline stake",
+                        formatted_node_pubkey,
+                        lamports_to_sol(config.baseline_stake_amount),
+                    ),
+                ));
+            }
+
+            if !too_many_poor_block_producers {
+                if quality_block_producers.contains(&node_pubkey) {
+                    // Transactions to create the baseline and bonus stake accounts
+                    if let Ok((balance, stake_state)) =
+                        get_stake_account(&rpc_client, &bonus_stake_address)
+                    {
+                        if balance != config.bonus_stake_amount {
+                            info!(
+                                "Unexpected balance in stake account {}: {}, expected {}",
+                                bonus_stake_address, balance, config.bonus_stake_amount
+                            );
+                        }
+                        if let Some(delegation) = stake_state.delegation() {
+                            if epoch_info.epoch == delegation.activation_epoch {
+                                stake_activated_in_current_epoch.insert(bonus_stake_address);
+                            }
+                        }
+                    } else {
+                        info!(
+                            "Need to create bonus stake account for validator {}",
+                            formatted_node_pubkey
+                        );
+                        source_stake_lamports_required += config.bonus_stake_amount;
+                        create_stake_transactions.push((
+                            Transaction::new_unsigned(Message::new(
+                                &stake_instruction::split_with_seed(
+                                    &config.source_stake_address,
+                                    &config.authorized_staker.pubkey(),
+                                    config.bonus_stake_amount,
+                                    &bonus_stake_address,
+                                    &config.authorized_staker.pubkey(),
+                                    bonus_seed,
+                                ),
+                                Some(&config.authorized_staker.pubkey()),
+                            )),
+                            format!(
+                                "Creating bonus stake account for validator {} ({})",
+                                formatted_node_pubkey, bonus_stake_address
+                            ),
+                        ));
+                    }
+
+                    // Delegate bonus stake
+                    if !stake_activated_in_current_epoch.contains(&bonus_stake_address) {
+                        delegate_stake_transactions.push((
+                            Transaction::new_unsigned(
+                            Message::new(
+                                &[stake_instruction::delegate_stake(
+                                    &bonus_stake_address,
+                                    &config.authorized_staker.pubkey(),
+                                    &vote_pubkey,
+                                )],
+                                Some(&config.authorized_staker.pubkey()),
+                            )),
+                            format!(
+                                "🏅 `{}` was a quality block producer during epoch {}. Added ◎{} bonus stake",
+                                formatted_node_pubkey,
+                                last_epoch,
+                                lamports_to_sol(config.bonus_stake_amount),
+                            ),
+                        ));
+                    }
+                } else {
+                    // Deactivate bonus stake
+                    delegate_stake_transactions.push((
+                        Transaction::new_unsigned(
+                        Message::new(
+                            &[stake_instruction::deactivate_stake(
+                                &bonus_stake_address,
+                                &config.authorized_staker.pubkey(),
+                            )],
+                            Some(&config.authorized_staker.pubkey()),
+                        )),
+                        format!(
+                            "💔 `{}` was a poor block producer during epoch {}. Removed ◎{} bonus stake",
+                            formatted_node_pubkey,
+                            last_epoch,
+                            lamports_to_sol(config.bonus_stake_amount),
+                        ),
+                    ));
+                }
             }
         }
     }
