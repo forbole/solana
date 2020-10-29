@@ -636,12 +636,15 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             if let Ok((_balance, _stake_state)) =
                 get_stake_account(&rpc_client, &baseline_stake_address)
             {
-                // Deactivate baseline stake
+                // Withdraw baseline stake
                 delegate_stake_transactions.push((
                     Transaction::new_unsigned(Message::new(
-                        &[stake_instruction::deactivate_stake(
+                        &[stake_instruction::withdraw(
                             &baseline_stake_address,
                             &config.authorized_staker.pubkey(),
+                            &config.source_stake_address,
+                            config.baseline_stake_amount,
+                            None
                         )],
                         Some(&config.authorized_staker.pubkey()),
                     )),
@@ -652,13 +655,16 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     ),
                 ));
 
-                // Deactivate bonus stake
+                // Withdraw bonus stake
                 delegate_stake_transactions.push((
-                    Transaction::new_unsigned(Message::new(
-                        &[stake_instruction::deactivate_stake(
-                            &bonus_stake_address,
-                            &config.authorized_staker.pubkey(),
-                        )],
+                        Transaction::new_unsigned(Message::new(
+                            &[stake_instruction::withdraw(
+                                &bonus_stake_address,
+                                &config.authorized_staker.pubkey(),
+                                &config.source_stake_address,
+                                config.bonus_stake_amount,
+                                None
+                            )],
                         Some(&config.authorized_staker.pubkey()),
                     )),
                     format!(
@@ -808,13 +814,15 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         ));
                     }
                 } else {
-                    // Deactivate bonus stake
+                    // Withdraw bonus stake
                     delegate_stake_transactions.push((
-                        Transaction::new_unsigned(
-                        Message::new(
-                            &[stake_instruction::deactivate_stake(
+                        Transaction::new_unsigned(Message::new(
+                            &[stake_instruction::withdraw(
                                 &bonus_stake_address,
                                 &config.authorized_staker.pubkey(),
+                                &config.source_stake_address,
+                                config.bonus_stake_amount,
+                                None
                             )],
                             Some(&config.authorized_staker.pubkey()),
                         )),
