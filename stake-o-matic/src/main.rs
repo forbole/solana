@@ -643,7 +643,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             }
             if let Some(delegation) = stake_state.delegation() {
                 baseline_is_undelegated = false;
-                baseline_is_deactivating = epoch_info.epoch == delegation.deactivation_epoch;
+                // epoch the stake was deactivated, std::Epoch::MAX if not deactivated
+                baseline_is_deactivating = delegation.deactivation_epoch != std::u64::MAX;
             }
         }
         // Check bonus status
@@ -657,7 +658,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             }
             if let Some(delegation) = stake_state.delegation() {
                 bonus_is_undelegated = false;
-                bonus_is_deactivating = epoch_info.epoch == delegation.deactivation_epoch;
+                // epoch the stake was deactivated, std::Epoch::MAX if not deactivated
+                bonus_is_deactivating = delegation.deactivation_epoch != std::u64::MAX;
             }
         }
 
@@ -756,7 +758,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 ("ok", true, bool)
             );
 
-            // Transactions to create the baseline
+            // Transactions to create the baseline account
             if !baseline_is_exist {
                 info!(
                     "Need to create baseline stake account for validator {}",
@@ -802,7 +804,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
             // Transactions to create the bonus
             if !too_many_poor_block_producers && quality_block_producers.contains(&node_pubkey) {
-                // Transactions to create the baseline and bonus stake accounts
+                // Transactions to create the bonus stake account
                 if !bonus_is_exist {
                     info!(
                         "Need to create bonus stake account for validator {}",
@@ -831,21 +833,21 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 if bonus_is_undelegated {
                     // Delegate bonus stake
                     delegate_stake_transactions.push((
-                            Transaction::new_unsigned(Message::new(
-                                &[stake_instruction::delegate_stake(
-                                    &bonus_stake_address,
-                                    &config.authorized_staker.pubkey(),
-                                    &vote_pubkey,
-                                )],
-                                Some(&config.authorized_staker.pubkey()),
-                            )),
-                            format!(
-                                "🏅 `{}` was a quality block producer during epoch {}. Added ◎{} bonus stake",
-                                formatted_node_pubkey,
-                                last_epoch,
-                                lamports_to_sol(config.bonus_stake_amount),
-                            ),
-                        ));
+                        Transaction::new_unsigned(Message::new(
+                            &[stake_instruction::delegate_stake(
+                                &bonus_stake_address,
+                                &config.authorized_staker.pubkey(),
+                                &vote_pubkey,
+                            )],
+                            Some(&config.authorized_staker.pubkey()),
+                        )),
+                        format!(
+                            "🏅 `{}` was a quality block producer during epoch {}. Added ◎{} bonus stake",
+                            formatted_node_pubkey,
+                            last_epoch,
+                            lamports_to_sol(config.bonus_stake_amount),
+                        ),
+                    ));
                 }
             } else {
                 if bonus_is_exist && bonus_is_undelegated {
