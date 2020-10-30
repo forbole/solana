@@ -615,11 +615,11 @@ fn get_accounts_action(
     source_stake_lamports_required: &mut u64,
     baseline_status: AccountStatus,
     bonus_status: AccountStatus
-) -> (AccountAction, AccountAction) {
+) -> (AccountAction, AccountAction, bool) {
     let formatted_node_pubkey = format_labeled_address(&node_pubkey.to_string(), &config.address_labels);
     let mut baseline_action = AccountAction::None;
     let mut bonus_action = AccountAction::None;
-
+    let mut validator_is_delinquent = false;
     // Validator is considered delinquent if its root slot is less than delinquent_grace_slot_distance( 21600 ) slots behind the current
     // slot.  This is very generous.
     if *root_slot
@@ -634,7 +634,7 @@ fn get_accounts_action(
             ("slot", epoch_info.absolute_slot, i64),
             ("ok", false, bool)
         );
-
+        validator_is_delinquent = true;
         if baseline_status.is_exist && baseline_status.is_undelegated {
             baseline_action = AccountAction::Withdraw;
         } else if baseline_status.is_exist && !baseline_status.is_deactivating {
@@ -686,14 +686,14 @@ fn get_accounts_action(
             }
         }
     }
-    return (baseline_action, bonus_action);
+    return (baseline_action, bonus_action, validator_is_delinquent);
 }
 
 #[allow(clippy::cognitive_complexity)] // Yeah I know...
 fn main() -> Result<(), Box<dyn error::Error>> {
     solana_logger::setup_with_default("solana=info");
     let config = get_config();
-
+    let mut validator_list = config.validator_list.clone();
     let notifier = Notifier::default();
     let rpc_client = RpcClient::new(config.json_rpc_url.clone());
 
@@ -774,7 +774,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         );
 
         // Determine the action of baseline and accounts
-        let (baseline_action, bonus_action) = get_accounts_action(
+        let (baseline_action, bonus_action, validator_is_delinquent) = get_accounts_action(
             &root_slot,
             &epoch_info,
             &config,
@@ -823,6 +823,11 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     formatted_node_pubkey, bonus_stake_address
                 ),
             ));
+        }
+
+        if validator_is_delinquent {
+             // remove delinquent validator from list
+             validator_list.remove(&node_pubkey);
         }
 
         // Delegation transactions by actions
@@ -983,7 +988,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             notifier.send(&message);
         }
     }
-
+    
     if !process_confirmations(
         confirmations,
         if config.dry_run {
