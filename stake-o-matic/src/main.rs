@@ -20,6 +20,7 @@ use solana_sdk::{
     pubkey::Pubkey,
     signature::{Keypair, Signature, Signer},
     transaction::Transaction,
+    epoch_info::EpochInfo
 };
 use solana_stake_program::{stake_instruction, stake_state::StakeState};
 
@@ -596,6 +597,97 @@ fn check_account_status(
     }
     return status;
 }
+#[derive(Debug)]
+enum AccountAction{
+    None,
+    Create,
+    Delegate,
+    Deactivate,
+    Withdraw
+}
+
+fn get_accounts_action(
+    root_slot: &u64,
+    epoch_info: &EpochInfo,
+    config: &Config,
+    node_pubkey: &Pubkey,
+    validator_is_qualified: bool,
+    source_stake_lamports_required: &mut u64,
+    baseline_status: AccountStatus,
+    bonus_status: AccountStatus
+) -> (AccountAction, AccountAction) {
+    let formatted_node_pubkey = format_labeled_address(&node_pubkey.to_string(), &config.address_labels);
+    let mut baseline_action = AccountAction::None;
+    let mut bonus_action = AccountAction::None;
+
+    // Validator is considered delinquent if its root slot is less than delinquent_grace_slot_distance( 21600 ) slots behind the current
+    // slot.  This is very generous.
+    if *root_slot
+        < epoch_info
+            .absolute_slot
+            .saturating_sub(config.delinquent_grace_slot_distance)
+    {
+        datapoint_info!(
+            "validator-status",
+            ("cluster", config.cluster, String),
+            ("id", node_pubkey.to_string(), String),
+            ("slot", epoch_info.absolute_slot, i64),
+            ("ok", false, bool)
+        );
+
+        if baseline_status.is_exist && baseline_status.is_undelegated {
+            baseline_action = AccountAction::Withdraw;
+        } else if baseline_status.is_exist && !baseline_status.is_deactivating {
+            baseline_action = AccountAction::Deactivate;
+        }
+        
+        if bonus_status.is_exist && bonus_status.is_undelegated {
+            bonus_action = AccountAction::Withdraw;
+        } else if bonus_status.is_exist && !bonus_status.is_deactivating {
+            bonus_action = AccountAction::Deactivate;
+        }
+    } else {
+        // The validator is still considered current for the purposes of metrics reporting,
+        datapoint_info!(
+            "validator-status",
+            ("cluster", config.cluster, String),
+            ("id", node_pubkey.to_string(), String),
+            ("slot", epoch_info.absolute_slot, i64),
+            ("ok", true, bool)
+        );
+
+        if !baseline_status.is_exist {
+            info!(
+                "Need to create baseline stake account for validator {}",
+                formatted_node_pubkey
+            );
+            *source_stake_lamports_required += config.baseline_stake_amount;
+            baseline_action = AccountAction::Create;
+        } else if baseline_status.is_undelegated {
+            baseline_action = AccountAction::Delegate;
+        }
+        // The action of the bonus
+        if validator_is_qualified {
+            if !bonus_status.is_exist {
+                info!(
+                    "Need to create bonus stake account for validator {}",
+                    formatted_node_pubkey
+                );
+                *source_stake_lamports_required += config.bonus_stake_amount;
+                bonus_action = AccountAction::Create;
+            } else if bonus_status.is_undelegated {
+                bonus_action = AccountAction::Delegate;
+            }
+        } else {
+            if bonus_status.is_exist && bonus_status.is_undelegated {
+                bonus_action = AccountAction::Withdraw;
+            } else if bonus_status.is_exist && !bonus_status.is_deactivating {
+                bonus_action = AccountAction::Deactivate;
+            }
+        }
+    }
+    return (baseline_action, bonus_action);
+}
 
 #[allow(clippy::cognitive_complexity)] // Yeah I know...
 fn main() -> Result<(), Box<dyn error::Error>> {
@@ -650,6 +742,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         let baseline_seed = &vote_pubkey.to_string()[..32];
         let bonus_seed = &format!("A{{{}", vote_pubkey)[..32];
         let vote_pubkey = Pubkey::from_str(&vote_pubkey).unwrap();
+        let validator_is_qualified = !too_many_poor_block_producers && quality_block_producers.contains(&node_pubkey);
 
         let baseline_stake_address = Pubkey::create_with_seed(
             &config.authorized_staker.pubkey(),
@@ -680,16 +773,62 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             String::from("bonus")
         );
 
-        // Validator is considered delinquent if its root slot is less than delinquent_grace_slot_distance( 21600 ) slots behind the current
-        // slot.  This is very generous.
-        if *root_slot
-            < epoch_info
-                .absolute_slot
-                .saturating_sub(config.delinquent_grace_slot_distance)
-        {
-            if baseline_status.is_exist && baseline_status.is_undelegated {
-                // Withdraw baseline stake
-                delegate_stake_transactions.push((
+        // Determine the action of baseline and accounts
+        let (baseline_action, bonus_action) = get_accounts_action(
+            &root_slot,
+            &epoch_info,
+            &config,
+            &node_pubkey,
+            validator_is_qualified,
+            &mut source_stake_lamports_required,
+            baseline_status,
+            bonus_status
+        );
+
+        // Create transaction to create account by actions
+        if let AccountAction::Create = baseline_action {
+            create_stake_transactions.push((
+                Transaction::new_unsigned(Message::new(
+                    &stake_instruction::split_with_seed(
+                        &config.source_stake_address,
+                        &config.authorized_staker.pubkey(),
+                        config.baseline_stake_amount,
+                        &baseline_stake_address,
+                        &config.authorized_staker.pubkey(),
+                        baseline_seed,
+                    ),
+                    Some(&config.authorized_staker.pubkey()),
+                )),
+                format!(
+                    "Creating baseline stake account for validator {} ({})",
+                    formatted_node_pubkey, baseline_stake_address
+                ),
+            ));
+        }
+        if let AccountAction::Create = bonus_action {
+            create_stake_transactions.push((
+                Transaction::new_unsigned(Message::new(
+                    &stake_instruction::split_with_seed(
+                        &config.source_stake_address,
+                        &config.authorized_staker.pubkey(),
+                        config.bonus_stake_amount,
+                        &bonus_stake_address,
+                        &config.authorized_staker.pubkey(),
+                        bonus_seed,
+                    ),
+                    Some(&config.authorized_staker.pubkey()),
+                )),
+                format!(
+                    "Creating bonus stake account for validator {} ({})",
+                    formatted_node_pubkey, bonus_stake_address
+                ),
+            ));
+        }
+
+        // Delegation transactions by actions
+        if let AccountAction::None = baseline_action {}
+        else if let AccountAction::Withdraw = baseline_action { 
+            delegate_stake_transactions.push((
                     Transaction::new_unsigned(Message::new(
                         &[stake_instruction::withdraw(
                             &baseline_stake_address,
@@ -706,207 +845,90 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         lamports_to_sol(config.baseline_stake_amount),
                     ),
                 ));
-            } else if baseline_status.is_exist && !baseline_status.is_deactivating {
-                delegate_stake_transactions.push((
-                    Transaction::new_unsigned(Message::new(
-                        &[stake_instruction::deactivate_stake(
-                            &baseline_stake_address,
-                            &config.authorized_staker.pubkey(),
-                        )],
-                        Some(&config.authorized_staker.pubkey()),
-                    )),
-                    format!(
-                        "🏖️ `{}` is delinquent. Deactivated ◎{} baseline stake",
-                        formatted_node_pubkey,
-                        lamports_to_sol(config.baseline_stake_amount),
-                    ),
-                ));
-            }
-            if bonus_status.is_exist && bonus_status.is_undelegated {
-                // Withdraw bonus stake
-                delegate_stake_transactions.push((
-                    Transaction::new_unsigned(Message::new(
-                        &[stake_instruction::withdraw(
-                            &bonus_stake_address,
-                            &config.authorized_staker.pubkey(),
-                            &config.source_stake_address,
-                            config.bonus_stake_amount,
-                            None,
-                        )],
-                        Some(&config.authorized_staker.pubkey()),
-                    )),
-                    format!(
-                        "🏖️ `{}` is delinquent. Removed ◎{} bonus stake",
-                        formatted_node_pubkey,
-                        lamports_to_sol(config.bonus_stake_amount),
-                    ),
-                ));
-
-                datapoint_info!(
-                    "validator-status",
-                    ("cluster", config.cluster, String),
-                    ("id", node_pubkey.to_string(), String),
-                    ("slot", epoch_info.absolute_slot, i64),
-                    ("ok", false, bool)
-                );
-            } else if bonus_status.is_exist && !bonus_status.is_deactivating {
-                delegate_stake_transactions.push((
-                    Transaction::new_unsigned(Message::new(
-                        &[stake_instruction::deactivate_stake(
-                            &bonus_stake_address,
-                            &config.authorized_staker.pubkey(),
-                        )],
-                        Some(&config.authorized_staker.pubkey()),
-                    )),
-                    format!(
-                        "🏖️ `{}` is delinquent. Deactivated ◎{} bonus stake",
-                        formatted_node_pubkey,
-                        lamports_to_sol(config.bonus_stake_amount),
-                    ),
-                ));
-            }
+        } else if let AccountAction::Deactivate = baseline_action{
+            delegate_stake_transactions.push((
+                Transaction::new_unsigned(Message::new(
+                    &[stake_instruction::deactivate_stake(
+                        &baseline_stake_address,
+                        &config.authorized_staker.pubkey(),
+                    )],
+                    Some(&config.authorized_staker.pubkey()),
+                )),
+                format!(
+                    "🏖️ `{}` is delinquent. Deactivated ◎{} baseline stake",
+                    formatted_node_pubkey,
+                    lamports_to_sol(config.baseline_stake_amount),
+                ),
+            ));
         } else {
-            // The validator is still considered current for the purposes of metrics reporting,
-            datapoint_info!(
-                "validator-status",
-                ("cluster", config.cluster, String),
-                ("id", node_pubkey.to_string(), String),
-                ("slot", epoch_info.absolute_slot, i64),
-                ("ok", true, bool)
-            );
+            delegate_stake_transactions.push((
+                Transaction::new_unsigned(Message::new(
+                    &[stake_instruction::delegate_stake(
+                        &baseline_stake_address,
+                        &config.authorized_staker.pubkey(),
+                        &vote_pubkey,
+                    )],
+                    Some(&config.authorized_staker.pubkey()),
+                )),
+                format!(
+                    "🥩 `{}` is current. Added ◎{} baseline stake",
+                    formatted_node_pubkey,
+                    lamports_to_sol(config.baseline_stake_amount),
+                ),
+            ));
+        }
 
-            // Transactions to create the baseline account
-            if !baseline_status.is_exist {
-                info!(
-                    "Need to create baseline stake account for validator {}",
-                    formatted_node_pubkey
-                );
-                source_stake_lamports_required += config.baseline_stake_amount;
-                create_stake_transactions.push((
-                    Transaction::new_unsigned(Message::new(
-                        &stake_instruction::split_with_seed(
-                            &config.source_stake_address,
-                            &config.authorized_staker.pubkey(),
-                            config.baseline_stake_amount,
-                            &baseline_stake_address,
-                            &config.authorized_staker.pubkey(),
-                            baseline_seed,
-                        ),
-                        Some(&config.authorized_staker.pubkey()),
-                    )),
-                    format!(
-                        "Creating baseline stake account for validator {} ({})",
-                        formatted_node_pubkey, baseline_stake_address
-                    ),
-                ));
-            }
-            if baseline_status.is_undelegated {
-                // Delegate baseline stake
-                delegate_stake_transactions.push((
-                    Transaction::new_unsigned(Message::new(
-                        &[stake_instruction::delegate_stake(
-                            &baseline_stake_address,
-                            &config.authorized_staker.pubkey(),
-                            &vote_pubkey,
-                        )],
-                        Some(&config.authorized_staker.pubkey()),
-                    )),
-                    format!(
-                        "🥩 `{}` is current. Added ◎{} baseline stake",
-                        formatted_node_pubkey,
-                        lamports_to_sol(config.baseline_stake_amount),
-                    ),
-                ));
-            }
-
-            // Transactions to create the bonus
-            if !too_many_poor_block_producers && quality_block_producers.contains(&node_pubkey) {
-                // Transactions to create the bonus stake account
-                if !bonus_status.is_exist {
-                    info!(
-                        "Need to create bonus stake account for validator {}",
-                        formatted_node_pubkey
-                    );
-                    source_stake_lamports_required += config.bonus_stake_amount;
-                    create_stake_transactions.push((
-                        Transaction::new_unsigned(Message::new(
-                            &stake_instruction::split_with_seed(
-                                &config.source_stake_address,
-                                &config.authorized_staker.pubkey(),
-                                config.bonus_stake_amount,
-                                &bonus_stake_address,
-                                &config.authorized_staker.pubkey(),
-                                bonus_seed,
-                            ),
-                            Some(&config.authorized_staker.pubkey()),
-                        )),
-                        format!(
-                            "Creating bonus stake account for validator {} ({})",
-                            formatted_node_pubkey, bonus_stake_address
-                        ),
-                    ));
-                }
-
-                if bonus_status.is_undelegated {
-                    // Delegate bonus stake
-                    delegate_stake_transactions.push((
-                        Transaction::new_unsigned(Message::new(
-                            &[stake_instruction::delegate_stake(
-                                &bonus_stake_address,
-                                &config.authorized_staker.pubkey(),
-                                &vote_pubkey,
-                            )],
-                            Some(&config.authorized_staker.pubkey()),
-                        )),
-                        format!(
-                            "🏅 `{}` was a quality block producer during epoch {}. Added ◎{} bonus stake",
-                            formatted_node_pubkey,
-                            last_epoch,
-                            lamports_to_sol(config.bonus_stake_amount),
-                        ),
-                    ));
-                }
-            } else {
-                if bonus_status.is_exist && bonus_status.is_undelegated {
-                    // Withdraw bonus stake
-                    delegate_stake_transactions.push((
-                        Transaction::new_unsigned(Message::new(
-                            &[stake_instruction::withdraw(
-                                &bonus_stake_address,
-                                &config.authorized_staker.pubkey(),
-                                &config.source_stake_address,
-                                config.bonus_stake_amount,
-                                None,
-                            )],
-                            Some(&config.authorized_staker.pubkey()),
-                            )),
-                            format!(
-                                "💔 `{}` was a poor block producer during epoch {}. Removed ◎{} bonus stake",
-                                formatted_node_pubkey,
-                                last_epoch,
-                                lamports_to_sol(config.bonus_stake_amount),
-                            ),
-                        ));
-                } else if bonus_status.is_exist && !bonus_status.is_deactivating {
-                    // Deactivate bonus stake
-                    delegate_stake_transactions.push((
-                        Transaction::new_unsigned(
-                        Message::new(
-                            &[stake_instruction::deactivate_stake(
-                                &bonus_stake_address,
-                                &config.authorized_staker.pubkey(),
-                            )],
-                            Some(&config.authorized_staker.pubkey()),
-                        )),
-                        format!(
-                            "💔 `{}` was a poor block producer during epoch {}. Deactivated ◎{} bonus stake",
-                            formatted_node_pubkey,
-                            last_epoch,
-                            lamports_to_sol(config.bonus_stake_amount),
-                        ),
-                    ));
-                }
-            }
+        if let AccountAction::None = baseline_action {}
+        else if let AccountAction::Withdraw = bonus_action {
+            delegate_stake_transactions.push((
+                Transaction::new_unsigned(Message::new(
+                    &[stake_instruction::withdraw(
+                        &bonus_stake_address,
+                        &config.authorized_staker.pubkey(),
+                        &config.source_stake_address,
+                        config.bonus_stake_amount,
+                        None,
+                    )],
+                    Some(&config.authorized_staker.pubkey()),
+                )),
+                format!(
+                    "🏖️ `{}` is delinquent. Removed ◎{} bonus stake",
+                    formatted_node_pubkey,
+                    lamports_to_sol(config.bonus_stake_amount),
+                ),
+            ));
+        } else if let AccountAction::Deactivate = bonus_action {
+            delegate_stake_transactions.push((
+                Transaction::new_unsigned(Message::new(
+                    &[stake_instruction::deactivate_stake(
+                        &bonus_stake_address,
+                        &config.authorized_staker.pubkey(),
+                    )],
+                    Some(&config.authorized_staker.pubkey()),
+                )),
+                format!(
+                    "🏖️ `{}` is delinquent. Deactivated ◎{} bonus stake",
+                    formatted_node_pubkey,
+                    lamports_to_sol(config.bonus_stake_amount),
+                ),
+            ));
+        } else {
+            delegate_stake_transactions.push((
+                Transaction::new_unsigned(Message::new(
+                    &[stake_instruction::delegate_stake(
+                        &bonus_stake_address,
+                        &config.authorized_staker.pubkey(),
+                        &vote_pubkey,
+                    )],
+                    Some(&config.authorized_staker.pubkey()),
+                )),
+                format!(
+                    "🏅 `{}` was a quality block producer during epoch {}. Added ◎{} bonus stake",
+                    formatted_node_pubkey,
+                    last_epoch,
+                    lamports_to_sol(config.bonus_stake_amount),
+                ),
+            ));
         }
     }
     if create_stake_transactions.is_empty() {
