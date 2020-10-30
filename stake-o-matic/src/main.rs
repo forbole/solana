@@ -558,6 +558,45 @@ fn process_confirmations(
     ok
 }
 
+struct AccountStatus {
+    is_exist: bool,
+    is_deactivating: bool,
+    is_undelegated: bool
+}
+
+fn check_account_status(
+    rpc_client: &RpcClient,
+    stake_address: &Pubkey,
+    config: &Config,
+    account_type: String
+) -> AccountStatus {
+    let mut status = AccountStatus {
+        is_exist: false,
+        is_deactivating: false,
+        is_undelegated: true
+    };
+    let mut stake_amount = config.baseline_stake_amount;
+    if account_type == "bonus"{
+        stake_amount = config.bonus_stake_amount;
+    }
+
+    if let Ok((balance, stake_state)) = get_stake_account(&rpc_client, &stake_address) {
+        status.is_exist = true;        
+        if balance != stake_amount {
+            info!(
+                "Unexpected balance in stake account {}: {}, expected {}",
+                stake_address, balance, stake_amount
+            );
+        }
+        if let Some(delegation) = stake_state.delegation() {
+            status.is_undelegated = false;
+            // epoch the stake was deactivated, std::Epoch::MAX if not deactivated
+            status.is_deactivating = delegation.deactivation_epoch != std::u64::MAX;
+        }
+    }
+    return status;
+}
+
 #[allow(clippy::cognitive_complexity)] // Yeah I know...
 fn main() -> Result<(), Box<dyn error::Error>> {
     solana_logger::setup_with_default("solana=info");
@@ -611,12 +650,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         let baseline_seed = &vote_pubkey.to_string()[..32];
         let bonus_seed = &format!("A{{{}", vote_pubkey)[..32];
         let vote_pubkey = Pubkey::from_str(&vote_pubkey).unwrap();
-        let mut baseline_is_exist: bool = false;
-        let mut bonus_is_exist: bool = false;
-        let mut baseline_is_deactivating: bool = false;
-        let mut bonus_is_deactivating: bool = false;
-        let mut baseline_is_undelegated: bool = true;
-        let mut bonus_is_undelegated: bool = true;
 
         let baseline_stake_address = Pubkey::create_with_seed(
             &config.authorized_staker.pubkey(),
@@ -632,36 +665,20 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         .unwrap();
 
         // Check baseline status
-        if let Ok((balance, stake_state)) = get_stake_account(&rpc_client, &baseline_stake_address)
-        {
-            baseline_is_exist = true;
-            if balance != config.baseline_stake_amount {
-                info!(
-                    "Unexpected balance in stake account {}: {}, expected {}",
-                    baseline_stake_address, balance, config.baseline_stake_amount
-                );
-            }
-            if let Some(delegation) = stake_state.delegation() {
-                baseline_is_undelegated = false;
-                // epoch the stake was deactivated, std::Epoch::MAX if not deactivated
-                baseline_is_deactivating = delegation.deactivation_epoch != std::u64::MAX;
-            }
-        }
+        let baseline_status = check_account_status(
+            &rpc_client,
+            &baseline_stake_address,
+            &config,
+            String::from("baseline")
+        );
+
         // Check bonus status
-        if let Ok((balance, stake_state)) = get_stake_account(&rpc_client, &bonus_stake_address) {
-            bonus_is_exist = true;
-            if balance != config.bonus_stake_amount {
-                info!(
-                    "Unexpected balance in stake account {}: {}, expected {}",
-                    bonus_stake_address, balance, config.bonus_stake_amount
-                );
-            }
-            if let Some(delegation) = stake_state.delegation() {
-                bonus_is_undelegated = false;
-                // epoch the stake was deactivated, std::Epoch::MAX if not deactivated
-                bonus_is_deactivating = delegation.deactivation_epoch != std::u64::MAX;
-            }
-        }
+        let bonus_status = check_account_status(
+            &rpc_client,
+            &bonus_stake_address,
+            &config,
+            String::from("bonus")
+        );
 
         // Validator is considered delinquent if its root slot is less than delinquent_grace_slot_distance( 21600 ) slots behind the current
         // slot.  This is very generous.
@@ -670,7 +687,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .absolute_slot
                 .saturating_sub(config.delinquent_grace_slot_distance)
         {
-            if baseline_is_exist && baseline_is_undelegated {
+            if baseline_status.is_exist && baseline_status.is_undelegated {
                 // Withdraw baseline stake
                 delegate_stake_transactions.push((
                     Transaction::new_unsigned(Message::new(
@@ -689,7 +706,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         lamports_to_sol(config.baseline_stake_amount),
                     ),
                 ));
-            } else if baseline_is_exist && !baseline_is_deactivating {
+            } else if baseline_status.is_exist && !baseline_status.is_deactivating {
                 delegate_stake_transactions.push((
                     Transaction::new_unsigned(Message::new(
                         &[stake_instruction::deactivate_stake(
@@ -705,7 +722,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     ),
                 ));
             }
-            if bonus_is_exist && bonus_is_undelegated {
+            if bonus_status.is_exist && bonus_status.is_undelegated {
                 // Withdraw bonus stake
                 delegate_stake_transactions.push((
                     Transaction::new_unsigned(Message::new(
@@ -732,7 +749,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     ("slot", epoch_info.absolute_slot, i64),
                     ("ok", false, bool)
                 );
-            } else if bonus_is_exist && !bonus_is_deactivating {
+            } else if bonus_status.is_exist && !bonus_status.is_deactivating {
                 delegate_stake_transactions.push((
                     Transaction::new_unsigned(Message::new(
                         &[stake_instruction::deactivate_stake(
@@ -759,7 +776,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             );
 
             // Transactions to create the baseline account
-            if !baseline_is_exist {
+            if !baseline_status.is_exist {
                 info!(
                     "Need to create baseline stake account for validator {}",
                     formatted_node_pubkey
@@ -783,7 +800,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     ),
                 ));
             }
-            if baseline_is_undelegated {
+            if baseline_status.is_undelegated {
                 // Delegate baseline stake
                 delegate_stake_transactions.push((
                     Transaction::new_unsigned(Message::new(
@@ -805,7 +822,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             // Transactions to create the bonus
             if !too_many_poor_block_producers && quality_block_producers.contains(&node_pubkey) {
                 // Transactions to create the bonus stake account
-                if !bonus_is_exist {
+                if !bonus_status.is_exist {
                     info!(
                         "Need to create bonus stake account for validator {}",
                         formatted_node_pubkey
@@ -830,7 +847,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     ));
                 }
 
-                if bonus_is_undelegated {
+                if bonus_status.is_undelegated {
                     // Delegate bonus stake
                     delegate_stake_transactions.push((
                         Transaction::new_unsigned(Message::new(
@@ -850,7 +867,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     ));
                 }
             } else {
-                if bonus_is_exist && bonus_is_undelegated {
+                if bonus_status.is_exist && bonus_status.is_undelegated {
                     // Withdraw bonus stake
                     delegate_stake_transactions.push((
                         Transaction::new_unsigned(Message::new(
@@ -870,7 +887,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                                 lamports_to_sol(config.bonus_stake_amount),
                             ),
                         ));
-                } else if bonus_is_exist && !bonus_is_deactivating {
+                } else if bonus_status.is_exist && !bonus_status.is_deactivating {
                     // Deactivate bonus stake
                     delegate_stake_transactions.push((
                         Transaction::new_unsigned(
