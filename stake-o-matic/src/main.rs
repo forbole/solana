@@ -636,14 +636,30 @@ fn get_accounts_action(
         );
         validator_is_delinquent = true;
         if baseline_status.is_exist && baseline_status.is_undelegated {
+            info!(
+                "Need to withdraw baseline stake account from validator {}",
+                formatted_node_pubkey
+            );
             baseline_action = AccountAction::Withdraw;
         } else if baseline_status.is_exist && !baseline_status.is_deactivating {
+            info!(
+                "Need to deactivate baseline stake account from validator {}",
+                formatted_node_pubkey
+            );
             baseline_action = AccountAction::Deactivate;
         }
         
         if bonus_status.is_exist && bonus_status.is_undelegated {
+            info!(
+                "Need to withdraw bonus stake account from validator {}",
+                formatted_node_pubkey
+            );
             bonus_action = AccountAction::Withdraw;
         } else if bonus_status.is_exist && !bonus_status.is_deactivating {
+            info!(
+                "Need to deactivate bonus stake account from validator {}",
+                formatted_node_pubkey
+            );
             bonus_action = AccountAction::Deactivate;
         }
     } else {
@@ -664,6 +680,10 @@ fn get_accounts_action(
             *source_stake_lamports_required += config.baseline_stake_amount;
             baseline_action = AccountAction::Create;
         } else if baseline_status.is_undelegated {
+            info!(
+                "Need to delegate baseline stake account to validator {}",
+                formatted_node_pubkey
+            );
             baseline_action = AccountAction::Delegate;
         }
         // The action of the bonus
@@ -676,14 +696,26 @@ fn get_accounts_action(
                 *source_stake_lamports_required += config.bonus_stake_amount;
                 bonus_action = AccountAction::Create;
             } else if bonus_status.is_undelegated {
+                info!(
+                    "Need to delegate bonus stake account to validator {}",
+                    formatted_node_pubkey
+                );
                 bonus_action = AccountAction::Delegate;
             }
         } else {
             if bonus_status.is_exist && bonus_status.is_undelegated {
+                info!(
+                    "Need to withdraw bonus stake account from validator {}",
+                    formatted_node_pubkey
+                );
                 bonus_action = AccountAction::Withdraw;
             } else if bonus_status.is_exist && !bonus_status.is_deactivating {
+                info!(
+                    "Need to deactivate bonus stake account from validator {}",
+                    formatted_node_pubkey
+                );
                 bonus_action = AccountAction::Deactivate;
-            }
+            } 
         }
     }
     return (baseline_action, bonus_action, validator_is_delinquent);
@@ -707,8 +739,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let (quality_block_producers, poor_block_producers) =
         classify_block_producers(&rpc_client, &config, last_epoch)?;
 
-    let too_many_poor_block_producers = poor_block_producers.len()
-        > quality_block_producers.len() * config.max_poor_block_productor_percentage / 100;
+    let too_many_poor_block_producers = false;
 
     // Fetch vote account status for all the validator_listed validators
     let vote_account_status = rpc_client.get_vote_accounts()?;
@@ -883,7 +914,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             ));
         }
 
-        if let AccountAction::None = baseline_action {}
+        if let AccountAction::None = bonus_action {}
         else if let AccountAction::Withdraw = bonus_action {
             delegate_stake_transactions.push((
                 Transaction::new_unsigned(Message::new(
@@ -897,7 +928,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     Some(&config.authorized_staker.pubkey()),
                 )),
                 format!(
-                    "🏖️ `{}` is delinquent. Removed ◎{} bonus stake",
+                    "🏖️ `{}` is unqualified. Removed ◎{} bonus stake",
                     formatted_node_pubkey,
                     lamports_to_sol(config.bonus_stake_amount),
                 ),
@@ -912,7 +943,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     Some(&config.authorized_staker.pubkey()),
                 )),
                 format!(
-                    "🏖️ `{}` is delinquent. Deactivated ◎{} bonus stake",
+                    "🏖️ `{}` is unqualified. Deactivated ◎{} bonus stake",
                     formatted_node_pubkey,
                     lamports_to_sol(config.bonus_stake_amount),
                 ),
