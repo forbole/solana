@@ -87,19 +87,22 @@ fn get_accounts_action(
             ("slot", epoch_info.absolute_slot, i64),
             ("ok", false, bool)
         );
-        validator_is_delinquent = true;
+        
         if baseline_status.is_exist && baseline_status.is_undelegated {
             info!(
                 "Need to withdraw baseline stake account from validator {}",
                 formatted_node_pubkey
             );
             baseline_action = AccountAction::Withdraw;
+            validator_is_delinquent = true;
         } else if baseline_status.is_exist && !baseline_status.is_deactivating {
             info!(
                 "Need to deactivate baseline stake account from validator {}",
                 formatted_node_pubkey
             );
             baseline_action = AccountAction::Deactivate;
+        } else if !baseline_status.is_exist{
+            validator_is_delinquent = true;
         }
         if bonus_status.is_exist && bonus_status.is_undelegated {
             info!(
@@ -124,6 +127,7 @@ fn get_accounts_action(
             ("ok", true, bool)
         );
 
+        // the action of baseline
         if !baseline_status.is_exist {
             info!(
                 "Need to create baseline stake account for validator {}",
@@ -180,9 +184,9 @@ pub fn create_stake_transactions(
     quality_block_producers: HashSet<Pubkey>,
     too_many_poor_block_producers: bool,
     epoch_info: &EpochInfo,
-) -> (Vec<(Transaction, String)>, Vec<(Transaction, String)>, u64) {
+) -> (Vec<(Transaction, String)>, Vec<(Transaction, String)>, Vec<String>, u64) {
     let last_epoch = epoch_info.epoch - 1;
-    let mut validator_list = config.validator_list.clone();
+    let mut validator_list: Vec<String> = vec![];
     let mut source_stake_lamports_required = 0;
     let mut create_stake_transactions = vec![];
     let mut delegate_stake_transactions = vec![];
@@ -280,11 +284,6 @@ pub fn create_stake_transactions(
                     formatted_node_pubkey, bonus_stake_address
                 ),
             ));
-        }
-
-        if validator_is_delinquent {
-            // remove delinquent validator from list
-            validator_list.remove(&node_pubkey);
         }
 
         // Delegation transactions by actions
@@ -392,10 +391,16 @@ pub fn create_stake_transactions(
                 ),
             ));
         }
+
+        if !validator_is_delinquent {
+            // remove delinquent validator from list
+            validator_list.push(node_pubkey.to_string());
+        }
     }
     return (
         create_stake_transactions,
         delegate_stake_transactions,
+        validator_list,
         source_stake_lamports_required,
     );
 }
