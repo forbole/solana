@@ -1,5 +1,6 @@
 use lazy_static::lazy_static;
 use solana_sdk::{
+    clock::Slot,
     hash::{Hash, Hasher},
     pubkey::Pubkey,
 };
@@ -33,7 +34,7 @@ pub mod bpf_loader2_program {
     solana_sdk::declare_id!("DFBnrgThdzH4W6wZ12uGPoWcMnvfZj11EHnxHcVxLPhD");
 }
 
-pub mod compute_budget_balancing {
+pub mod bpf_compute_budget_balancing {
     solana_sdk::declare_id!("HxvjqDSiF5sYdSYuCXsUnS8UeAoWsMT9iGoFP8pgV1mB");
 }
 
@@ -65,12 +66,20 @@ pub mod cumulative_rent_related_fixes {
     solana_sdk::declare_id!("FtjnuAtJTWwX3Kx9m24LduNEhzaGuuPfDW6e14SX2Fy5");
 }
 
+pub mod sol_log_compute_units_syscall {
+    solana_sdk::declare_id!("BHuZqHAj7JdZc68wVgZZcy51jZykvgrx4zptR44RyChe");
+}
+
 pub mod pubkey_log_syscall_enabled {
     solana_sdk::declare_id!("MoqiU1vryuCGQSxFKA1SZ316JdLEFFhoAu6cKUNk7dN");
 }
 
 pub mod pull_request_ping_pong_check {
     solana_sdk::declare_id!("5RzEHTnf6D7JPZCvwEzjM19kzBsyjSU3HoMfXaQmVgnZ");
+}
+
+pub mod timestamp_bounding {
+    solana_sdk::declare_id!("8FyEA6ABYiMxX7Az6AopQN3mavLD8Rz3N4bvKnbbBFFq");
 }
 
 lazy_static! {
@@ -83,7 +92,7 @@ lazy_static! {
         (inflation_kill_switch::id(), "inflation kill switch"),
         (spl_token_v2_multisig_fix::id(), "spl-token multisig fix"),
         (bpf_loader2_program::id(), "bpf_loader2 program"),
-        (compute_budget_balancing::id(), "compute budget balancing"),
+        (bpf_compute_budget_balancing::id(), "compute budget balancing"),
         (sha256_syscall_enabled::id(), "sha256 syscall"),
         (no_overflow_rent_distribution::id(), "no overflow rent distribution"),
         (ristretto_mul_syscall_enabled::id(), "ristretto multiply syscall"),
@@ -91,8 +100,10 @@ lazy_static! {
         (max_program_call_depth_64::id(), "max program call depth 64"),
         (timestamp_correction::id(), "correct bank timestamps"),
         (cumulative_rent_related_fixes::id(), "rent fixes (#10206, #10468, #11342)"),
+        (sol_log_compute_units_syscall::id(), "sol_log_compute_units syscall (#13243)"),
         (pubkey_log_syscall_enabled::id(), "pubkey log syscall"),
         (pull_request_ping_pong_check::id(), "ping-pong packet check #12794"),
+        (timestamp_bounding::id(), "add timestamp-correction bounding #13120"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
@@ -114,21 +125,25 @@ lazy_static! {
 /// `FeatureSet` holds the set of currently active/inactive runtime features
 #[derive(AbiExample, Debug, Clone)]
 pub struct FeatureSet {
-    pub active: HashSet<Pubkey>,
+    pub active: HashMap<Pubkey, Slot>,
     pub inactive: HashSet<Pubkey>,
 }
 impl Default for FeatureSet {
     fn default() -> Self {
         // All features disabled
         Self {
-            active: HashSet::new(),
+            active: HashMap::new(),
             inactive: FEATURE_NAMES.keys().cloned().collect(),
         }
     }
 }
 impl FeatureSet {
     pub fn is_active(&self, feature_id: &Pubkey) -> bool {
-        self.active.contains(feature_id)
+        self.active.contains_key(feature_id)
+    }
+
+    pub fn activated_slot(&self, feature_id: &Pubkey) -> Option<Slot> {
+        self.active.get(feature_id).copied()
     }
 
     pub fn cumulative_rent_related_fixes_enabled(&self) -> bool {
@@ -138,7 +153,7 @@ impl FeatureSet {
     /// All features enabled, useful for testing
     pub fn all_enabled() -> Self {
         Self {
-            active: FEATURE_NAMES.keys().cloned().collect(),
+            active: FEATURE_NAMES.keys().cloned().map(|key| (key, 0)).collect(),
             inactive: HashSet::new(),
         }
     }

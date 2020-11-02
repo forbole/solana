@@ -23,25 +23,25 @@ use crate::{
     },
     data_budget::DataBudget,
     epoch_slots::EpochSlots,
+    ping_pong::{self, PingCache, Pong},
     result::{Error, Result},
     weighted_shuffle::weighted_shuffle,
 };
 
 use rand::distributions::{Distribution, WeightedIndex};
-use rand::SeedableRng;
+use rand::{CryptoRng, Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
 use solana_sdk::sanitize::{Sanitize, SanitizeError};
 
 use bincode::{serialize, serialized_size};
 use core::cmp;
 use itertools::Itertools;
-use rayon::iter::IntoParallelIterator;
-use rayon::iter::ParallelIterator;
+use rayon::prelude::*;
 use rayon::{ThreadPool, ThreadPoolBuilder};
 use solana_ledger::staking_utils;
 use solana_measure::measure::Measure;
 use solana_measure::thread_mem_usage;
-use solana_metrics::{datapoint_debug, inc_new_counter_debug, inc_new_counter_error};
+use solana_metrics::{inc_new_counter_debug, inc_new_counter_error};
 use solana_net_utils::{
     bind_common, bind_common_in_range, bind_in_range, find_available_port_in_range,
     multi_bind_in_range, PortRange,
@@ -52,10 +52,10 @@ use solana_perf::packet::{
 };
 use solana_rayon_threadlimit::get_thread_count;
 use solana_runtime::bank_forks::BankForks;
-use solana_runtime::feature_set::{self, FeatureSet};
-use solana_sdk::hash::Hash;
 use solana_sdk::{
     clock::{Slot, DEFAULT_MS_PER_SLOT, DEFAULT_SLOTS_PER_EPOCH},
+    feature_set::{self, FeatureSet},
+    hash::Hash,
     pubkey::Pubkey,
     signature::{Keypair, Signable, Signature, Signer},
     timing::timestamp,
@@ -66,7 +66,7 @@ use solana_streamer::streamer::{PacketReceiver, PacketSender};
 use std::{
     borrow::Cow,
     cmp::min,
-    collections::{HashMap, HashSet},
+    collections::{hash_map::Entry, HashMap, HashSet},
     fmt,
     net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, UdpSocket},
     ops::{Deref, DerefMut},
@@ -97,6 +97,10 @@ const MAX_GOSSIP_TRAFFIC: usize = 128_000_000 / PACKET_DATA_SIZE;
 
 /// Keep the number of snapshot hashes a node publishes under MAX_PROTOCOL_PAYLOAD_SIZE
 pub const MAX_SNAPSHOT_HASHES: usize = 16;
+/// Number of bytes in the randomly generated token sent with ping messages.
+const GOSSIP_PING_TOKEN_SIZE: usize = 32;
+const GOSSIP_PING_CACHE_CAPACITY: usize = 16384;
+const GOSSIP_PING_CACHE_TTL: Duration = Duration::from_secs(640);
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ClusterInfoError {
@@ -226,6 +230,7 @@ struct GossipStats {
     prune_received_cache: Counter,
     prune_message_count: Counter,
     prune_message_len: Counter,
+    pull_request_ping_pong_check_failed_count: Counter,
     purge: Counter,
     epoch_slots_lookup: Counter,
     epoch_slots_push: Counter,
@@ -251,6 +256,7 @@ pub struct ClusterInfo {
     entrypoint: RwLock<Option<ContactInfo>>,
     outbound_budget: DataBudget,
     my_contact_info: RwLock<ContactInfo>,
+    ping_cache: RwLock<PingCache>,
     id: Pubkey,
     stats: GossipStats,
     socket: UdpSocket,
@@ -355,8 +361,10 @@ pub fn make_accounts_hashes_message(
     Some(CrdsValue::new_signed(message, keypair))
 }
 
+type Ping = ping_pong::Ping<[u8; GOSSIP_PING_TOKEN_SIZE]>;
+
 // TODO These messages should go through the gpu pipeline for spam filtering
-#[frozen_abi(digest = "21UweZ4WXK9RHypF97D1rEJQ4C8Bh4pw52SBSNAKxJvW")]
+#[frozen_abi(digest = "3jHXixLRv6fuCykW47hBZSwFuwDjbZShR73GVQB6TjGr")]
 #[derive(Serialize, Deserialize, Debug, AbiEnumVisitor, AbiExample)]
 #[allow(clippy::large_enum_variant)]
 enum Protocol {
@@ -365,6 +373,8 @@ enum Protocol {
     PullResponse(Pubkey, Vec<CrdsValue>),
     PushMessage(Pubkey, Vec<CrdsValue>),
     PruneMessage(Pubkey, PruneData),
+    PingMessage(Ping),
+    PongMessage(Pong),
 }
 
 impl Protocol {
@@ -416,6 +426,22 @@ impl Protocol {
                     None
                 }
             }
+            Protocol::PingMessage(ref ping) => {
+                if ping.verify() {
+                    Some(self)
+                } else {
+                    inc_new_counter_info!("cluster_info-gossip_ping_msg_verify_fail", 1);
+                    None
+                }
+            }
+            Protocol::PongMessage(ref pong) => {
+                if pong.verify() {
+                    Some(self)
+                } else {
+                    inc_new_counter_info!("cluster_info-gossip_pong_msg_verify_fail", 1);
+                    None
+                }
+            }
         }
     }
 }
@@ -430,6 +456,8 @@ impl Sanitize for Protocol {
             Protocol::PullResponse(_, val) => val.sanitize(),
             Protocol::PushMessage(_, val) => val.sanitize(),
             Protocol::PruneMessage(_, val) => val.sanitize(),
+            Protocol::PingMessage(ping) => ping.sanitize(),
+            Protocol::PongMessage(pong) => pong.sanitize(),
         }
     }
 }
@@ -459,6 +487,10 @@ impl ClusterInfo {
             entrypoint: RwLock::new(None),
             outbound_budget: DataBudget::default(),
             my_contact_info: RwLock::new(contact_info),
+            ping_cache: RwLock::new(PingCache::new(
+                GOSSIP_PING_CACHE_TTL,
+                GOSSIP_PING_CACHE_CAPACITY,
+            )),
             id,
             stats: GossipStats::default(),
             socket: UdpSocket::bind("0.0.0.0:0").unwrap(),
@@ -486,6 +518,7 @@ impl ClusterInfo {
             entrypoint: RwLock::new(self.entrypoint.read().unwrap().clone()),
             outbound_budget: self.outbound_budget.clone_non_atomic(),
             my_contact_info: RwLock::new(my_contact_info),
+            ping_cache: RwLock::new(self.ping_cache.read().unwrap().mock_clone()),
             id: *new_id,
             stats: GossipStats::default(),
             socket: UdpSocket::bind("0.0.0.0:0").unwrap(),
@@ -1772,114 +1805,103 @@ impl ClusterInfo {
             .unwrap()
     }
 
-    #[allow(clippy::cognitive_complexity)]
-    fn handle_packets(
-        &self,
-        recycler: &PacketsRecycler,
-        stakes: &HashMap<Pubkey, u64>,
-        packets: Vec<(SocketAddr, Protocol)>,
-        response_sender: &PacketSender,
-        feature_set: Option<&FeatureSet>,
-        epoch_time_ms: u64,
-    ) {
-        // iter over the packets, collect pulls separately and process everything else
-        let allocated = thread_mem_usage::Allocatedp::default();
-        let mut gossip_pull_data: Vec<PullData> = vec![];
-        let timeouts = self
-            .gossip
-            .read()
-            .unwrap()
-            .make_timeouts(&stakes, epoch_time_ms);
-        let mut pull_responses = HashMap::new();
-        for (from_addr, packet) in packets {
-            match packet {
-                Protocol::PullRequest(filter, caller) => {
-                    let start = allocated.get();
-                    if let Some(contact_info) = caller.contact_info() {
-                        if contact_info.id == self.id() {
-                            warn!("PullRequest ignored, I'm talking to myself");
-                            inc_new_counter_debug!("cluster_info-window-request-loopback", 1);
-                        } else if contact_info.shred_version == 0
-                            || contact_info.shred_version == self.my_shred_version()
-                            || self.my_shred_version() == 0
-                        {
-                            gossip_pull_data.push(PullData {
-                                from_addr,
-                                caller,
-                                filter,
-                            });
-                        } else {
-                            self.stats.skip_pull_shred_version.add_relaxed(1);
-                        }
+    fn handle_batch_prune_messages(&self, messages: Vec<(Pubkey, PruneData)>) {
+        if messages.is_empty() {
+            return;
+        }
+        self.stats
+            .prune_message_count
+            .add_relaxed(messages.len() as u64);
+        self.stats.prune_message_len.add_relaxed(
+            messages
+                .iter()
+                .map(|(_, data)| data.prunes.len() as u64)
+                .sum(),
+        );
+        let mut prune_message_timeout = 0;
+        let mut bad_prune_destination = 0;
+        {
+            let mut gossip =
+                self.time_gossip_write_lock("process_prune", &self.stats.process_prune);
+            let now = timestamp();
+            for (from, data) in messages {
+                match gossip.process_prune_msg(
+                    &from,
+                    &data.destination,
+                    &data.prunes,
+                    data.wallclock,
+                    now,
+                ) {
+                    Err(CrdsGossipError::PruneMessageTimeout) => {
+                        prune_message_timeout += 1;
                     }
-                    datapoint_debug!(
-                        "solana-gossip-listen-memory",
-                        ("pull_request", (allocated.get() - start) as i64, i64),
-                    );
-                }
-                Protocol::PullResponse(from, data) => {
-                    let start = allocated.get();
-                    let pull_entry = pull_responses.entry(from).or_insert_with(Vec::new);
-                    pull_entry.extend(data);
-                    datapoint_debug!(
-                        "solana-gossip-listen-memory",
-                        ("pull_response", (allocated.get() - start) as i64, i64),
-                    );
-                }
-                Protocol::PushMessage(from, data) => {
-                    let start = allocated.get();
-                    let rsp = self.handle_push_message(recycler, &from, data, stakes);
-                    if let Some(rsp) = rsp {
-                        let _ignore_disconnect = response_sender.send(rsp);
+                    Err(CrdsGossipError::BadPruneDestination) => {
+                        bad_prune_destination += 1;
                     }
-                    datapoint_debug!(
-                        "solana-gossip-listen-memory",
-                        ("push_message", (allocated.get() - start) as i64, i64),
-                    );
-                }
-                Protocol::PruneMessage(from, data) => {
-                    let start = allocated.get();
-                    self.stats.prune_message_count.add_relaxed(1);
-                    self.stats
-                        .prune_message_len
-                        .add_relaxed(data.prunes.len() as u64);
-                    match self
-                        .time_gossip_write_lock("process_prune", &self.stats.process_prune)
-                        .process_prune_msg(
-                            &from,
-                            &data.destination,
-                            &data.prunes,
-                            data.wallclock,
-                            timestamp(),
-                        ) {
-                        Err(CrdsGossipError::PruneMessageTimeout) => {
-                            inc_new_counter_debug!("cluster_info-prune_message_timeout", 1)
-                        }
-                        Err(CrdsGossipError::BadPruneDestination) => {
-                            inc_new_counter_debug!("cluster_info-bad_prune_destination", 1)
-                        }
-                        _ => (),
-                    }
-                    datapoint_debug!(
-                        "solana-gossip-listen-memory",
-                        ("prune_message", (allocated.get() - start) as i64, i64),
-                    );
+                    _ => (),
                 }
             }
         }
-
-        for (from, data) in pull_responses {
-            self.handle_pull_response(&from, data, &timeouts);
+        if prune_message_timeout != 0 {
+            inc_new_counter_debug!("cluster_info-prune_message_timeout", prune_message_timeout);
         }
+        if bad_prune_destination != 0 {
+            inc_new_counter_debug!("cluster_info-bad_prune_destination", bad_prune_destination);
+        }
+    }
 
-        // process the collected pulls together
-        if !gossip_pull_data.is_empty() {
+    fn handle_batch_pull_requests(
+        &self,
+        // from address, crds filter, caller contact info
+        requests: Vec<(SocketAddr, CrdsFilter, CrdsValue)>,
+        thread_pool: &ThreadPool,
+        recycler: &PacketsRecycler,
+        stakes: &HashMap<Pubkey, u64>,
+        response_sender: &PacketSender,
+        feature_set: Option<&FeatureSet>,
+    ) {
+        if requests.is_empty() {
+            return;
+        }
+        let self_pubkey = self.id();
+        let self_shred_version = self.my_shred_version();
+        let requests: Vec<_> = thread_pool.install(|| {
+            requests
+                .into_par_iter()
+                .with_min_len(1024)
+                .filter(|(_, _, caller)| match caller.contact_info() {
+                    None => false,
+                    Some(caller) if caller.id == self_pubkey => {
+                        warn!("PullRequest ignored, I'm talking to myself");
+                        inc_new_counter_debug!("cluster_info-window-request-loopback", 1);
+                        false
+                    }
+                    Some(caller) => {
+                        if self_shred_version != 0
+                            && caller.shred_version != 0
+                            && caller.shred_version != self_shred_version
+                        {
+                            self.stats.skip_pull_shred_version.add_relaxed(1);
+                            false
+                        } else {
+                            true
+                        }
+                    }
+                })
+                .map(|(from_addr, filter, caller)| PullData {
+                    from_addr,
+                    caller,
+                    filter,
+                })
+                .collect()
+        });
+        if !requests.is_empty() {
             self.stats
                 .pull_requests_count
-                .add_relaxed(gossip_pull_data.len() as u64);
-            let rsp = self.handle_pull_requests(recycler, gossip_pull_data, stakes, feature_set);
-            if let Some(rsp) = rsp {
-                let _ignore_disconnect = response_sender.send(rsp);
+                .add_relaxed(requests.len() as u64);
+            let response = self.handle_pull_requests(recycler, requests, stakes, feature_set);
+            if !response.is_empty() {
+                let _ = response_sender.send(response);
             }
         }
     }
@@ -1898,6 +1920,49 @@ impl ClusterInfo {
         });
     }
 
+    // Returns a predicate checking if the pull request is from a valid
+    // address, and if the address have responded to a ping request. Also
+    // appends ping packets for the addresses which need to be (re)verified.
+    fn check_pull_request<'a, R>(
+        &'a self,
+        now: Instant,
+        mut rng: &'a mut R,
+        packets: &'a mut Packets,
+        feature_set: Option<&FeatureSet>,
+    ) -> impl FnMut(&PullData) -> bool + 'a
+    where
+        R: Rng + CryptoRng,
+    {
+        let check_enabled = matches!(feature_set, Some(feature_set) if
+            feature_set.is_active(&feature_set::pull_request_ping_pong_check::id()));
+        let mut cache = HashMap::<(Pubkey, SocketAddr), bool>::new();
+        let mut pingf = move || Ping::new_rand(&mut rng, &self.keypair).ok();
+        let mut ping_cache = self.ping_cache.write().unwrap();
+        let mut hard_check = move |node| {
+            let (check, ping) = ping_cache.check(now, node, &mut pingf);
+            if let Some(ping) = ping {
+                let ping = Protocol::PingMessage(ping);
+                let ping = Packet::from_data(&node.1, ping);
+                packets.packets.push(ping);
+            }
+            if !check {
+                self.stats
+                    .pull_request_ping_pong_check_failed_count
+                    .add_relaxed(1)
+            }
+            check || !check_enabled
+        };
+        // Because pull-responses are sent back to packet.meta.addr() of
+        // incoming pull-requests, pings are also sent to request.from_addr (as
+        // opposed to caller.gossip address).
+        move |request| {
+            ContactInfo::is_valid_address(&request.from_addr) && {
+                let node = (request.caller.pubkey(), request.from_addr);
+                *cache.entry(node).or_insert_with(|| hard_check(node))
+            }
+        }
+    }
+
     // Pull requests take an incoming bloom filter of contained entries from a node
     // and tries to send back to them the values it detects are missing.
     fn handle_pull_requests(
@@ -1906,21 +1971,22 @@ impl ClusterInfo {
         requests: Vec<PullData>,
         stakes: &HashMap<Pubkey, u64>,
         feature_set: Option<&FeatureSet>,
-    ) -> Option<Packets> {
-        if matches!(feature_set, Some(feature_set) if
-                    feature_set.is_active(&feature_set::pull_request_ping_pong_check::id()))
-        {
-            // TODO: add ping-pong check on pull-request addresses.
-        }
-        // split the requests into addrs and filters
-        let mut caller_and_filters = vec![];
-        let mut addrs = vec![];
+    ) -> Packets {
         let mut time = Measure::start("handle_pull_requests");
+        self.time_gossip_write_lock("process_pull_reqs", &self.stats.process_pull_requests)
+            .process_pull_requests(requests.iter().map(|r| r.caller.clone()), timestamp());
         self.update_data_budget(stakes.len());
-        for pull_data in requests {
-            caller_and_filters.push((pull_data.caller, pull_data.filter));
-            addrs.push(pull_data.from_addr);
-        }
+        let mut packets = Packets::new_with_recycler(recycler.clone(), 64, "handle_pull_requests");
+        let (caller_and_filters, addrs): (Vec<_>, Vec<_>) = {
+            let mut rng = rand::thread_rng();
+            let check_pull_request =
+                self.check_pull_request(Instant::now(), &mut rng, &mut packets, feature_set);
+            requests
+                .into_iter()
+                .filter(check_pull_request)
+                .map(|r| ((r.caller, r.filter), r.from_addr))
+                .unzip()
+        };
         let now = timestamp();
         let self_id = self.id();
 
@@ -1931,27 +1997,14 @@ impl ClusterInfo {
             )
             .generate_pull_responses(&caller_and_filters, now);
 
-        self.time_gossip_write_lock("process_pull_reqs", &self.stats.process_pull_requests)
-            .process_pull_requests(caller_and_filters, now);
-
-        // Filter bad to addresses
         let pull_responses: Vec<_> = pull_responses
             .into_iter()
             .zip(addrs.into_iter())
-            .filter_map(|(responses, from_addr)| {
-                if !from_addr.ip().is_unspecified()
-                    && from_addr.port() != 0
-                    && !responses.is_empty()
-                {
-                    Some((responses, from_addr))
-                } else {
-                    None
-                }
-            })
+            .filter(|(response, _)| !response.is_empty())
             .collect();
 
         if pull_responses.is_empty() {
-            return None;
+            return packets;
         }
 
         let mut stats: Vec<_> = pull_responses
@@ -1983,7 +2036,6 @@ impl ClusterInfo {
         let rng = &mut ChaChaRng::from_seed(seed);
         let weighted_index = WeightedIndex::new(weights).unwrap();
 
-        let mut packets = Packets::new_with_recycler(recycler.clone(), 64, "handle_pull_requests");
         let mut total_bytes = 0;
         let mut sent = HashSet::new();
         while sent.len() < stats.len() {
@@ -2018,10 +2070,71 @@ impl ClusterInfo {
             stats.len(),
             total_bytes
         );
-        if packets.is_empty() {
-            return None;
+        packets
+    }
+
+    fn handle_batch_pull_responses(
+        &self,
+        responses: Vec<(Pubkey, Vec<CrdsValue>)>,
+        thread_pool: &ThreadPool,
+        stakes: &HashMap<Pubkey, u64>,
+        epoch_time_ms: u64,
+    ) {
+        if responses.is_empty() {
+            return;
         }
-        Some(packets)
+        fn extend<K, V>(hash_map: &mut HashMap<K, Vec<V>>, (key, mut value): (K, Vec<V>))
+        where
+            K: Eq + std::hash::Hash,
+        {
+            match hash_map.entry(key) {
+                Entry::Occupied(mut entry) => {
+                    let entry_value = entry.get_mut();
+                    if entry_value.len() < value.len() {
+                        std::mem::swap(entry_value, &mut value);
+                    }
+                    entry_value.extend(value);
+                }
+                Entry::Vacant(entry) => {
+                    entry.insert(value);
+                }
+            }
+        }
+        fn merge<K, V>(
+            mut hash_map: HashMap<K, Vec<V>>,
+            other: HashMap<K, Vec<V>>,
+        ) -> HashMap<K, Vec<V>>
+        where
+            K: Eq + std::hash::Hash,
+        {
+            if hash_map.len() < other.len() {
+                return merge(other, hash_map);
+            }
+            for kv in other {
+                extend(&mut hash_map, kv);
+            }
+            hash_map
+        }
+        let responses = thread_pool.install(|| {
+            responses
+                .into_par_iter()
+                .with_min_len(1024)
+                .fold(HashMap::new, |mut hash_map, kv| {
+                    extend(&mut hash_map, kv);
+                    hash_map
+                })
+                .reduce(HashMap::new, merge)
+        });
+        if !responses.is_empty() {
+            let timeouts = self
+                .gossip
+                .read()
+                .unwrap()
+                .make_timeouts(&stakes, epoch_time_ms);
+            for (from, data) in responses {
+                self.handle_pull_response(&from, data, &timeouts);
+            }
+        }
     }
 
     // Returns (failed, timeout, success)
@@ -2105,6 +2218,69 @@ impl ClusterInfo {
                 CrdsData::ContactInfo(contact_info) => contact_info.id == *from,
                 _ => false,
             });
+        }
+    }
+
+    fn handle_batch_ping_messages<I>(
+        &self,
+        pings: I,
+        recycler: &PacketsRecycler,
+        response_sender: &PacketSender,
+    ) where
+        I: IntoIterator<Item = (SocketAddr, Ping)>,
+    {
+        if let Some(response) = self.handle_ping_messages(pings, recycler) {
+            let _ = response_sender.send(response);
+        }
+    }
+
+    fn handle_ping_messages<I>(&self, pings: I, recycler: &PacketsRecycler) -> Option<Packets>
+    where
+        I: IntoIterator<Item = (SocketAddr, Ping)>,
+    {
+        let packets: Vec<_> = pings
+            .into_iter()
+            .filter_map(|(addr, ping)| {
+                let pong = Pong::new(&ping, &self.keypair).ok()?;
+                let pong = Protocol::PongMessage(pong);
+                let packet = Packet::from_data(&addr, pong);
+                Some(packet)
+            })
+            .collect();
+        if packets.is_empty() {
+            None
+        } else {
+            let packets =
+                Packets::new_with_recycler_data(recycler, "handle_ping_messages", packets);
+            Some(packets)
+        }
+    }
+
+    fn handle_batch_pong_messages<I>(&self, pongs: I, now: Instant)
+    where
+        I: IntoIterator<Item = (SocketAddr, Pong)>,
+    {
+        let mut pongs = pongs.into_iter().peekable();
+        if pongs.peek().is_some() {
+            let mut ping_cache = self.ping_cache.write().unwrap();
+            for (addr, pong) in pongs {
+                ping_cache.add(&pong, addr, now);
+            }
+        }
+    }
+
+    fn handle_batch_push_messages(
+        &self,
+        messages: Vec<(Pubkey, Vec<CrdsValue>)>,
+        recycler: &PacketsRecycler,
+        stakes: &HashMap<Pubkey, u64>,
+        response_sender: &PacketSender,
+    ) {
+        for (from, data) in messages {
+            let response = self.handle_push_message(recycler, &from, data, stakes);
+            if let Some(response) = response {
+                let _ = response_sender.send(response);
+            }
         }
     }
 
@@ -2233,13 +2409,37 @@ impl ClusterInfo {
                 })
                 .collect()
         });
-        self.handle_packets(
+        // Split packets based on their types.
+        let mut pull_requests = vec![];
+        let mut pull_responses = vec![];
+        let mut push_messages = vec![];
+        let mut prune_messages = vec![];
+        let mut ping_messages = vec![];
+        let mut pong_messages = vec![];
+        for (from_addr, packet) in packets {
+            match packet {
+                Protocol::PullRequest(filter, caller) => {
+                    pull_requests.push((from_addr, filter, caller))
+                }
+                Protocol::PullResponse(from, data) => pull_responses.push((from, data)),
+                Protocol::PushMessage(from, data) => push_messages.push((from, data)),
+                Protocol::PruneMessage(from, data) => prune_messages.push((from, data)),
+                Protocol::PingMessage(ping) => ping_messages.push((from_addr, ping)),
+                Protocol::PongMessage(pong) => pong_messages.push((from_addr, pong)),
+            }
+        }
+        self.handle_batch_ping_messages(ping_messages, recycler, response_sender);
+        self.handle_batch_prune_messages(prune_messages);
+        self.handle_batch_push_messages(push_messages, recycler, &stakes, response_sender);
+        self.handle_batch_pull_responses(pull_responses, thread_pool, &stakes, epoch_time_ms);
+        self.handle_batch_pong_messages(pong_messages, Instant::now());
+        self.handle_batch_pull_requests(
+            pull_requests,
+            thread_pool,
             recycler,
             &stakes,
-            packets,
             response_sender,
             feature_set,
-            epoch_time_ms,
         );
         self.stats
             .process_gossip_packets_time
@@ -2410,6 +2610,11 @@ impl ClusterInfo {
                 (
                     "process_pull_requests",
                     self.stats.process_pull_requests.clear(),
+                    i64
+                ),
+                (
+                    "pull_request_ping_pong_check_failed_count",
+                    self.stats.pull_request_ping_pong_check_failed_count.clear(),
                     i64
                 ),
                 (
@@ -2796,12 +3001,13 @@ pub fn stake_weight_peers<S: std::hash::BuildHasher>(
 mod tests {
     use super::*;
     use crate::crds_value::{CrdsValue, CrdsValueLabel, Vote as CrdsVote};
-    use rayon::prelude::*;
+    use itertools::izip;
     use solana_perf::test_tx::test_tx;
     use solana_sdk::signature::{Keypair, Signer};
     use solana_vote_program::{vote_instruction, vote_state::Vote};
     use std::collections::HashSet;
-    use std::net::{IpAddr, Ipv4Addr};
+    use std::iter::repeat_with;
+    use std::net::{IpAddr, Ipv4Addr, SocketAddrV4};
     use std::sync::Arc;
 
     #[test]
@@ -2841,6 +3047,118 @@ mod tests {
             (1, 0, 0),
             ClusterInfo::handle_pull_response(&cluster_info, &entrypoint_pubkey2, data, &timeouts)
         );
+    }
+
+    fn new_rand_remote_node<R>(rng: &mut R) -> (Keypair, SocketAddr)
+    where
+        R: Rng,
+    {
+        let keypair = Keypair::new();
+        let socket = SocketAddr::V4(SocketAddrV4::new(
+            Ipv4Addr::new(rng.gen(), rng.gen(), rng.gen(), rng.gen()),
+            rng.gen(),
+        ));
+        (keypair, socket)
+    }
+
+    #[test]
+    fn test_handle_pong_messages() {
+        let now = Instant::now();
+        let mut rng = rand::thread_rng();
+        let this_node = Arc::new(Keypair::new());
+        let cluster_info = ClusterInfo::new(
+            ContactInfo::new_localhost(&this_node.pubkey(), timestamp()),
+            this_node.clone(),
+        );
+        let remote_nodes: Vec<(Keypair, SocketAddr)> =
+            repeat_with(|| new_rand_remote_node(&mut rng))
+                .take(128)
+                .collect();
+        let pings: Vec<_> = {
+            let mut ping_cache = cluster_info.ping_cache.write().unwrap();
+            let mut pingf = || Ping::new_rand(&mut rng, &this_node).ok();
+            remote_nodes
+                .iter()
+                .map(|(keypair, socket)| {
+                    let node = (keypair.pubkey(), *socket);
+                    let (check, ping) = ping_cache.check(now, node, &mut pingf);
+                    // Assert that initially remote nodes will not pass the
+                    // ping/pong check.
+                    assert!(!check);
+                    ping.unwrap()
+                })
+                .collect()
+        };
+        let pongs: Vec<(SocketAddr, Pong)> = pings
+            .iter()
+            .zip(&remote_nodes)
+            .map(|(ping, (keypair, socket))| (*socket, Pong::new(ping, keypair).unwrap()))
+            .collect();
+        let now = now + Duration::from_millis(1);
+        cluster_info.handle_batch_pong_messages(pongs, now);
+        // Assert that remote nodes now pass the ping/pong check.
+        {
+            let mut ping_cache = cluster_info.ping_cache.write().unwrap();
+            for (keypair, socket) in &remote_nodes {
+                let node = (keypair.pubkey(), *socket);
+                let (check, _) = ping_cache.check(now, node, || -> Option<Ping> { None });
+                assert!(check);
+            }
+        }
+        // Assert that a new random remote node still will not pass the check.
+        {
+            let mut ping_cache = cluster_info.ping_cache.write().unwrap();
+            let (keypair, socket) = new_rand_remote_node(&mut rng);
+            let node = (keypair.pubkey(), socket);
+            let (check, _) = ping_cache.check(now, node, || -> Option<Ping> { None });
+            assert!(!check);
+        }
+    }
+
+    #[test]
+    fn test_handle_ping_messages() {
+        let mut rng = rand::thread_rng();
+        let this_node = Arc::new(Keypair::new());
+        let cluster_info = ClusterInfo::new(
+            ContactInfo::new_localhost(&this_node.pubkey(), timestamp()),
+            this_node.clone(),
+        );
+        let remote_nodes: Vec<(Keypair, SocketAddr)> =
+            repeat_with(|| new_rand_remote_node(&mut rng))
+                .take(128)
+                .collect();
+        let pings: Vec<_> = remote_nodes
+            .iter()
+            .map(|(keypair, _)| Ping::new_rand(&mut rng, keypair).unwrap())
+            .collect();
+        let pongs: Vec<_> = pings
+            .iter()
+            .map(|ping| Pong::new(ping, &this_node).unwrap())
+            .collect();
+        let recycler = PacketsRecycler::default();
+        let packets = cluster_info
+            .handle_ping_messages(
+                remote_nodes
+                    .iter()
+                    .map(|(_, socket)| *socket)
+                    .zip(pings.into_iter()),
+                &recycler,
+            )
+            .unwrap()
+            .packets;
+        assert_eq!(remote_nodes.len(), packets.len());
+        for (packet, (_, socket), pong) in izip!(
+            packets.into_iter(),
+            remote_nodes.into_iter(),
+            pongs.into_iter()
+        ) {
+            assert_eq!(packet.meta.addr(), socket);
+            let bytes = serialize(&pong).unwrap();
+            match limited_deserialize(&packet.data[..packet.meta.size]).unwrap() {
+                Protocol::PongMessage(pong) => assert_eq!(serialize(&pong).unwrap(), bytes),
+                _ => panic!("invalid packet!"),
+            }
+        }
     }
 
     fn test_crds_values(pubkey: Pubkey) -> Vec<CrdsValue> {

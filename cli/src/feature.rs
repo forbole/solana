@@ -9,12 +9,13 @@ use solana_clap_utils::{input_parsers::*, input_validators::*, keypair::*};
 use solana_cli_output::{QuietDisplay, VerboseDisplay};
 use solana_client::{client_error::ClientError, rpc_client::RpcClient};
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
-use solana_runtime::{
+use solana_sdk::{
+    clock::Slot,
     feature::{self, Feature},
     feature_set::FEATURE_NAMES,
-};
-use solana_sdk::{
-    clock::Slot, message::Message, pubkey::Pubkey, system_instruction, transaction::Transaction,
+    message::Message,
+    pubkey::Pubkey,
+    transaction::Transaction,
 };
 use std::{collections::HashMap, fmt, sync::Arc};
 
@@ -279,7 +280,7 @@ fn process_status(
         let feature_id = &feature_ids[i];
         let feature_name = FEATURE_NAMES.get(feature_id).unwrap();
         if let Some(account) = account {
-            if let Some(feature) = Feature::from_account(&account) {
+            if let Some(feature) = feature::from_account(&account) {
                 let feature_status = match feature.activated_at {
                     None => CliFeatureStatus::Pending,
                     Some(activation_slot) => CliFeatureStatus::Active(activation_slot),
@@ -320,7 +321,7 @@ fn process_activate(
         .next()
         .unwrap();
     if let Some(account) = account {
-        if Feature::from_account(&account).is_some() {
+        if feature::from_account(&account).is_some() {
             return Err(format!("{} has already been activated", feature_id).into());
         }
     }
@@ -340,15 +341,11 @@ fn process_activate(
         &config.signers[0].pubkey(),
         |lamports| {
             Message::new(
-                &[
-                    system_instruction::transfer(
-                        &config.signers[0].pubkey(),
-                        &feature_id,
-                        lamports,
-                    ),
-                    system_instruction::allocate(&feature_id, Feature::size_of() as u64),
-                    system_instruction::assign(&feature_id, &feature::id()),
-                ],
+                &feature::activate_with_lamports(
+                    &feature_id,
+                    &config.signers[0].pubkey(),
+                    lamports,
+                ),
                 Some(&config.signers[0].pubkey()),
             )
         },

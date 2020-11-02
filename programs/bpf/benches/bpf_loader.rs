@@ -6,7 +6,6 @@ extern crate test;
 extern crate solana_bpf_loader_program;
 
 use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
-use solana_bpf_loader_program::syscalls::SyscallError;
 use solana_measure::measure::Measure;
 use solana_rbpf::vm::{EbpfVm, InstructionMeter};
 use solana_runtime::{
@@ -14,17 +13,15 @@ use solana_runtime::{
     bank_client::BankClient,
     genesis_utils::{create_genesis_config, GenesisConfigInfo},
     loader_utils::load_program,
-    process_instruction::{
-        ComputeBudget, ComputeMeter, Executor, InvokeContext, Logger, ProcessInstruction,
-    },
 };
 use solana_sdk::{
     account::Account,
     bpf_loader,
     client::SyncClient,
     entrypoint::SUCCESS,
-    instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
+    instruction::{AccountMeta, Instruction},
     message::Message,
+    process_instruction::{ComputeMeter, InvokeContext, MockInvokeContext},
     pubkey::Pubkey,
     signature::{Keypair, Signer},
 };
@@ -163,7 +160,7 @@ fn bench_program_execute_noop(bencher: &mut Bencher) {
     } = create_genesis_config(50);
     let mut bank = Bank::new(&genesis_config);
     let (name, id, entrypoint) = solana_bpf_loader_program!();
-    bank.add_builtin_loader(&name, id, entrypoint);
+    bank.add_builtin(&name, id, entrypoint);
     let bank = Arc::new(bank);
     let bank_client = BankClient::new_shared(&bank);
 
@@ -193,7 +190,7 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
     const BUDGET: u64 = 200_000;
     let loader_id = bpf_loader::id();
     let mut invoke_context = MockInvokeContext::default();
-    invoke_context.compute_meter.borrow_mut().remaining = BUDGET;
+    invoke_context.compute_meter.remaining = BUDGET;
     let compute_meter = invoke_context.get_compute_meter();
 
     let elf = load_elf("tuner").unwrap();
@@ -211,7 +208,11 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
 
     let mut measure = Measure::start("tune");
 
-    let accounts = [RefCell::new(Account::new(1, 10000001, &solana_sdk::pubkey::new_rand()))];
+    let accounts = [RefCell::new(Account::new(
+        1,
+        10000001,
+        &solana_sdk::pubkey::new_rand(),
+    ))];
     let keys = [solana_sdk::pubkey::new_rand()];
     let keyed_accounts: Vec<_> = keys
         .iter()
@@ -229,7 +230,8 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
     )
     .unwrap();
 
-    let _ = vm.execute_program_metered(&mut serialized, &[], &[], instruction_meter.clone());    measure.stop();
+    let _ = vm.execute_program_metered(&mut serialized, &[], &[], instruction_meter.clone());
+    measure.stop();
     assert_eq!(
         0,
         instruction_meter.get_remaining(),
@@ -241,80 +243,6 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
         measure.as_us(),
         vm.get_total_instruction_count(),
     );
-}
-
-#[derive(Debug, Default)]
-pub struct MockInvokeContext {
-    key: Pubkey,
-    logger: MockLogger,
-    compute_budget: ComputeBudget,
-    compute_meter: Rc<RefCell<MockComputeMeter>>,
-}
-impl InvokeContext for MockInvokeContext {
-    fn push(&mut self, _key: &Pubkey) -> Result<(), InstructionError> {
-        Ok(())
-    }
-    fn pop(&mut self) {}
-    fn verify_and_update(
-        &mut self,
-        _message: &Message,
-        _instruction: &CompiledInstruction,
-        _accounts: &[Rc<RefCell<Account>>],
-    ) -> Result<(), InstructionError> {
-        Ok(())
-    }
-    fn get_caller(&self) -> Result<&Pubkey, InstructionError> {
-        Ok(&self.key)
-    }
-    fn get_programs(&self) -> &[(Pubkey, ProcessInstruction)] {
-        &[]
-    }
-    fn get_logger(&self) -> Rc<RefCell<dyn Logger>> {
-        Rc::new(RefCell::new(self.logger.clone()))
-    }
-    fn get_compute_budget(&self) -> &ComputeBudget {
-        &self.compute_budget
-    }
-    fn get_compute_meter(&self) -> Rc<RefCell<dyn ComputeMeter>> {
-        self.compute_meter.clone()
-    }
-    fn add_executor(&mut self, _pubkey: &Pubkey, _executor: Arc<dyn Executor>) {}
-    fn get_executor(&mut self, _pubkey: &Pubkey) -> Option<Arc<dyn Executor>> {
-        None
-    }
-    fn record_instruction(&self, _instruction: &Instruction) {}
-    fn is_feature_active(&self, _feature_id: &Pubkey) -> bool {
-        true
-    }
-}
-#[derive(Debug, Default, Clone)]
-pub struct MockLogger {
-    pub log: Rc<RefCell<Vec<String>>>,
-}
-impl Logger for MockLogger {
-    fn log_enabled(&self) -> bool {
-        true
-    }
-    fn log(&mut self, message: &str) {
-        self.log.borrow_mut().push(message.to_string());
-    }
-}
-#[derive(Debug, Default, Clone)]
-pub struct MockComputeMeter {
-    pub remaining: u64,
-}
-impl ComputeMeter for MockComputeMeter {
-    fn consume(&mut self, amount: u64) -> Result<(), InstructionError> {
-        let exceeded = self.remaining < amount;
-        self.remaining = self.remaining.saturating_sub(amount);
-        if exceeded {
-            return Err(InstructionError::ComputationalBudgetExceeded);
-        }
-        Ok(())
-    }
-    fn get_remaining(&self) -> u64 {
-        self.remaining
-    }
 }
 
 /// Passed to the VM to enforce the compute budget

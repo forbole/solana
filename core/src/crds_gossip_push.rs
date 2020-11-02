@@ -35,7 +35,7 @@ pub const CRDS_GOSSIP_PUSH_FANOUT: usize = 6;
 pub const CRDS_GOSSIP_PUSH_MSG_TIMEOUT_MS: u64 = 30000;
 pub const CRDS_GOSSIP_PRUNE_MSG_TIMEOUT_MS: u64 = 500;
 pub const CRDS_GOSSIP_PRUNE_STAKE_THRESHOLD_PCT: f64 = 0.15;
-pub const CRDS_GOSSIP_PRUNE_MIN_INGRESS_NODES: usize = 2;
+pub const CRDS_GOSSIP_PRUNE_MIN_INGRESS_NODES: usize = 3;
 // Do not push to peers which have not been updated for this long.
 const PUSH_ACTIVE_TIMEOUT_MS: u64 = 60_000;
 
@@ -136,8 +136,12 @@ impl CrdsGossipPush {
 
         let mut keep = HashSet::new();
         let mut peer_stake_sum = 0;
+        keep.insert(*origin);
         for next in shuffle {
             let (next_peer, next_stake) = staked_peers[next];
+            if next_peer == *origin {
+                continue;
+            }
             keep.insert(next_peer);
             peer_stake_sum += next_stake;
             if peer_stake_sum >= prune_stake_threshold
@@ -284,12 +288,11 @@ impl CrdsGossipPush {
 
     /// add the `from` to the peer's filter of nodes
     pub fn process_prune_msg(&mut self, self_pubkey: &Pubkey, peer: &Pubkey, origins: &[Pubkey]) {
-        for origin in origins {
-            if origin == self_pubkey {
-                continue;
-            }
-            if let Some(p) = self.active_set.get_mut(peer) {
-                p.add(origin)
+        if let Some(peer) = self.active_set.get_mut(peer) {
+            for origin in origins {
+                if origin != self_pubkey {
+                    peer.add(origin);
+                }
             }
         }
     }

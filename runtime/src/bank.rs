@@ -12,15 +12,9 @@ use crate::{
     blockhash_queue::BlockhashQueue,
     builtins,
     epoch_stakes::{EpochStakes, NodeVoteAccounts},
-    feature::Feature,
-    feature_set::{self, FeatureSet},
     instruction_recorder::InstructionRecorder,
     log_collector::LogCollector,
     message_processor::{Executors, MessageProcessor},
-    process_instruction::{
-        ErasedProcessInstruction, ErasedProcessInstructionWithContext, Executor,
-        ProcessInstruction, ProcessInstructionWithContext,
-    },
     rent_collector::RentCollector,
     stakes::Stakes,
     status_cache::{SlotDelta, StatusCache},
@@ -36,7 +30,7 @@ use solana_metrics::{
     datapoint_debug, inc_new_counter_debug, inc_new_counter_error, inc_new_counter_info,
 };
 use solana_sdk::{
-    account::Account,
+    account::{create_account, from_account, Account},
     clock::{
         Epoch, Slot, SlotCount, SlotIndex, UnixTimestamp, DEFAULT_TICKS_PER_SECOND,
         MAX_PROCESSING_AGE, MAX_RECENT_BLOCKHASHES, MAX_TRANSACTION_FORWARDING_DELAY,
@@ -44,6 +38,8 @@ use solana_sdk::{
     },
     epoch_info::EpochInfo,
     epoch_schedule::EpochSchedule,
+    feature,
+    feature_set::{self, FeatureSet},
     fee_calculator::{FeeCalculator, FeeConfig, FeeRateGovernor},
     genesis_config::{ClusterType, GenesisConfig},
     hard_forks::HardForks,
@@ -54,16 +50,20 @@ use solana_sdk::{
     message::Message,
     native_loader,
     native_token::sol_to_lamports,
-    nonce,
+    nonce, nonce_account,
+    process_instruction::{BpfComputeBudget, Executor, ProcessInstructionWithContext},
     program_utils::limited_deserialize,
     pubkey::Pubkey,
+    recent_blockhashes_account,
     sanitize::Sanitize,
     signature::{Keypair, Signature},
     slot_hashes::SlotHashes,
     slot_history::SlotHistory,
-    stake_weighted_timestamp::{calculate_stake_weighted_timestamp, TIMESTAMP_SLOT_RANGE},
+    stake_weighted_timestamp::{
+        calculate_stake_weighted_timestamp, EstimateType, DEPRECATED_TIMESTAMP_SLOT_RANGE,
+    },
     system_transaction,
-    sysvar::{self, Sysvar},
+    sysvar::{self},
     timing::years_as_slots,
     transaction::{self, Result, Transaction, TransactionError},
 };
@@ -137,49 +137,30 @@ type RentCollectionCycleParams = (
 
 type EpochCount = u64;
 
-#[derive(Copy, Clone)]
-pub enum Entrypoint {
-    Program(ProcessInstruction),
-    Loader(ProcessInstructionWithContext),
-}
-
-impl fmt::Debug for Entrypoint {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        #[derive(Debug)]
-        enum EntrypointForDebug {
-            Program(String),
-            Loader(String),
-        }
-        // rustc doesn't compile due to bug without this work around
-        // https://github.com/rust-lang/rust/issues/50280
-        // https://users.rust-lang.org/t/display-function-pointer/17073/2
-        let entrypoint = match self {
-            Entrypoint::Program(instruction) => EntrypointForDebug::Program(format!(
-                "{:p}",
-                *instruction as ErasedProcessInstruction
-            )),
-            Entrypoint::Loader(instruction) => EntrypointForDebug::Loader(format!(
-                "{:p}",
-                *instruction as ErasedProcessInstructionWithContext
-            )),
-        };
-        write!(f, "{:?}", entrypoint)
-    }
-}
-
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Builtin {
     pub name: String,
     pub id: Pubkey,
-    pub entrypoint: Entrypoint,
+    pub process_instruction_with_context: ProcessInstructionWithContext,
 }
+
 impl Builtin {
-    pub fn new(name: &str, id: Pubkey, entrypoint: Entrypoint) -> Self {
+    pub fn new(
+        name: &str,
+        id: Pubkey,
+        process_instruction_with_context: ProcessInstructionWithContext,
+    ) -> Self {
         Self {
             name: name.to_string(),
             id,
-            entrypoint,
+            process_instruction_with_context,
         }
+    }
+}
+
+impl fmt::Debug for Builtin {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Builtin [name={}, id={}]", self.name, self.id)
     }
 }
 
@@ -223,7 +204,7 @@ impl AbiExample for Builtin {
         Self {
             name: String::default(),
             id: Pubkey::default(),
-            entrypoint: Entrypoint::Program(|_, _, _| Ok(())),
+            process_instruction_with_context: |_, _, _, _| Ok(()),
         }
     }
 }
@@ -692,6 +673,8 @@ pub struct Bank {
     /// The Message processor
     message_processor: MessageProcessor,
 
+    bpf_compute_budget: Option<BpfComputeBudget>,
+
     /// Builtin programs activated dynamically by feature
     feature_builtins: Arc<Vec<(Builtin, Pubkey)>>,
 
@@ -760,7 +743,7 @@ impl Bank {
             }
             bank.update_stake_history(None);
         }
-        bank.update_clock();
+        bank.update_clock(None);
         bank.update_rent();
         bank.update_epoch_schedule();
         bank.update_recent_blockhashes();
@@ -828,6 +811,7 @@ impl Bank {
             tick_height: AtomicU64::new(parent.tick_height.load(Relaxed)),
             signature_count: AtomicU64::new(0),
             message_processor: parent.message_processor.clone(),
+            bpf_compute_budget: parent.bpf_compute_budget,
             feature_builtins: parent.feature_builtins.clone(),
             hard_forks: parent.hard_forks.clone(),
             last_vote_sync: AtomicU64::new(parent.last_vote_sync.load(Relaxed)),
@@ -862,7 +846,7 @@ impl Bank {
         new.update_slot_hashes();
         new.update_rewards(parent.epoch());
         new.update_stake_history(Some(parent.epoch()));
-        new.update_clock();
+        new.update_clock(Some(parent.epoch()));
         new.update_fees();
         if !new.fix_recent_blockhashes_sysvar_delay() {
             new.update_recent_blockhashes();
@@ -933,6 +917,7 @@ impl Bank {
             epoch_stakes: fields.epoch_stakes,
             is_delta: AtomicBool::new(fields.is_delta),
             message_processor: new(),
+            bpf_compute_budget: None,
             feature_builtins: new(),
             last_vote_sync: new(),
             rewards: new(),
@@ -1086,38 +1071,84 @@ impl Bank {
     }
 
     pub fn clock(&self) -> sysvar::clock::Clock {
-        sysvar::clock::Clock::from_account(
-            &self.get_account(&sysvar::clock::id()).unwrap_or_default(),
-        )
-        .unwrap_or_default()
+        from_account(&self.get_account(&sysvar::clock::id()).unwrap_or_default())
+            .unwrap_or_default()
     }
 
-    fn update_clock(&self) {
+    fn update_clock(&self, parent_epoch: Option<Epoch>) {
         let mut unix_timestamp = self.unix_timestamp_from_genesis();
         if self
             .feature_set
             .is_active(&feature_set::timestamp_correction::id())
         {
-            if let Some(timestamp_estimate) = self.get_timestamp_estimate() {
+            let (estimate_type, epoch_start_timestamp) =
+                if let Some(timestamp_bounding_activation_slot) = self
+                    .feature_set
+                    .activated_slot(&feature_set::timestamp_bounding::id())
+                {
+                    // This check avoids a chicken-egg problem with epoch_start_timestamp, which is
+                    // needed for timestamp bounding, but isn't yet corrected for the activation slot
+                    let epoch_start_timestamp = if self.slot() > timestamp_bounding_activation_slot
+                    {
+                        let epoch = if let Some(epoch) = parent_epoch {
+                            epoch
+                        } else {
+                            self.epoch()
+                        };
+                        let first_slot_in_epoch =
+                            self.epoch_schedule.get_first_slot_in_epoch(epoch);
+                        Some((first_slot_in_epoch, self.clock().epoch_start_timestamp))
+                    } else {
+                        None
+                    };
+                    (EstimateType::Bounded, epoch_start_timestamp)
+                } else {
+                    (EstimateType::Unbounded, None)
+                };
+            if let Some(timestamp_estimate) =
+                self.get_timestamp_estimate(estimate_type, epoch_start_timestamp)
+            {
                 if timestamp_estimate > unix_timestamp {
                     datapoint_info!(
                         "bank-timestamp-correction",
                         ("from_genesis", unix_timestamp, i64),
                         ("corrected", timestamp_estimate, i64),
                     );
-                    unix_timestamp = timestamp_estimate
+                    unix_timestamp = timestamp_estimate;
+
+                    let ancestor_timestamp = self.clock().unix_timestamp;
+                    if self
+                        .feature_set
+                        .is_active(&feature_set::timestamp_bounding::id())
+                        && timestamp_estimate < ancestor_timestamp
+                    {
+                        unix_timestamp = ancestor_timestamp;
+                    }
                 }
             }
         }
+        let epoch_start_timestamp = if self
+            .feature_set
+            .is_active(&feature_set::timestamp_bounding::id())
+        {
+            // On epoch boundaries, update epoch_start_timestamp
+            if parent_epoch.is_some() && parent_epoch.unwrap() != self.epoch() {
+                unix_timestamp
+            } else {
+                self.clock().epoch_start_timestamp
+            }
+        } else {
+            Self::get_unused_from_slot(self.slot, self.unused) as i64
+        };
         let clock = sysvar::clock::Clock {
             slot: self.slot,
-            unused: Self::get_unused_from_slot(self.slot, self.unused),
+            epoch_start_timestamp,
             epoch: self.epoch_schedule.get_epoch(self.slot),
             leader_schedule_epoch: self.epoch_schedule.get_leader_schedule_epoch(self.slot),
             unix_timestamp,
         };
         self.update_sysvar_account(&sysvar::clock::id(), |account| {
-            clock.create_account(self.inherit_sysvar_account_balance(account))
+            create_account(&clock, self.inherit_sysvar_account_balance(account))
         });
     }
 
@@ -1125,10 +1156,10 @@ impl Bank {
         self.update_sysvar_account(&sysvar::slot_history::id(), |account| {
             let mut slot_history = account
                 .as_ref()
-                .map(|account| SlotHistory::from_account(&account).unwrap())
+                .map(|account| from_account::<SlotHistory>(&account).unwrap())
                 .unwrap_or_default();
             slot_history.add(self.slot());
-            slot_history.create_account(self.inherit_sysvar_account_balance(account))
+            create_account(&slot_history, self.inherit_sysvar_account_balance(account))
         });
     }
 
@@ -1136,15 +1167,15 @@ impl Bank {
         self.update_sysvar_account(&sysvar::slot_hashes::id(), |account| {
             let mut slot_hashes = account
                 .as_ref()
-                .map(|account| SlotHashes::from_account(&account).unwrap())
+                .map(|account| from_account::<SlotHashes>(&account).unwrap())
                 .unwrap_or_default();
             slot_hashes.add(self.parent_slot, self.parent_hash);
-            slot_hashes.create_account(self.inherit_sysvar_account_balance(account))
+            create_account(&slot_hashes, self.inherit_sysvar_account_balance(account))
         });
     }
 
     pub fn get_slot_history(&self) -> SlotHistory {
-        SlotHistory::from_account(&self.get_account(&sysvar::slot_history::id()).unwrap()).unwrap()
+        from_account(&self.get_account(&sysvar::slot_history::id()).unwrap()).unwrap()
     }
 
     fn update_epoch_stakes(&mut self, leader_schedule_epoch: Epoch) {
@@ -1179,27 +1210,27 @@ impl Bank {
 
     fn update_fees(&self) {
         self.update_sysvar_account(&sysvar::fees::id(), |account| {
-            sysvar::fees::create_account(
+            create_account(
+                &sysvar::fees::Fees::new(&self.fee_calculator),
                 self.inherit_sysvar_account_balance(account),
-                &self.fee_calculator,
             )
         });
     }
 
     fn update_rent(&self) {
         self.update_sysvar_account(&sysvar::rent::id(), |account| {
-            sysvar::rent::create_account(
-                self.inherit_sysvar_account_balance(account),
+            create_account(
                 &self.rent_collector.rent,
+                self.inherit_sysvar_account_balance(account),
             )
         });
     }
 
     fn update_epoch_schedule(&self) {
         self.update_sysvar_account(&sysvar::epoch_schedule::id(), |account| {
-            sysvar::epoch_schedule::create_account(
-                self.inherit_sysvar_account_balance(account),
+            create_account(
                 &self.epoch_schedule,
+                self.inherit_sysvar_account_balance(account),
             )
         });
     }
@@ -1210,11 +1241,18 @@ impl Bank {
         }
         // if I'm the first Bank in an epoch, ensure stake_history is updated
         self.update_sysvar_account(&sysvar::stake_history::id(), |account| {
-            sysvar::stake_history::create_account(
+            create_account::<sysvar::stake_history::StakeHistory>(
+                &self.stakes.read().unwrap().history(),
                 self.inherit_sysvar_account_balance(account),
-                self.stakes.read().unwrap().history(),
             )
         });
+    }
+
+    pub fn epoch_duration_in_years(&self, prev_epoch: Epoch) -> f64 {
+        // period: time that has passed as a fraction of a year, basically the length of
+        //  an epoch as a fraction of a year
+        //  calculated as: slots_elapsed / (slots / year)
+        self.epoch_schedule.get_slots_in_epoch(prev_epoch) as f64 / self.slots_per_year
     }
 
     // update rewards based on the previous epoch
@@ -1228,11 +1266,7 @@ impl Bank {
         let slot_in_year =
             (self.epoch_schedule.get_last_slot_in_epoch(prev_epoch)) as f64 / self.slots_per_year;
 
-        // period: time that has passed as a fraction of a year, basically the length of
-        //  an epoch as a fraction of a year
-        //  calculated as: slots_elapsed / (slots / year)
-        let epoch_duration_in_years =
-            self.epoch_schedule.get_slots_in_epoch(prev_epoch) as f64 / self.slots_per_year;
+        let epoch_duration_in_years = self.epoch_duration_in_years(prev_epoch);
 
         let (validator_rate, foundation_rate) = {
             let inflation = self.inflation.read().unwrap();
@@ -1246,7 +1280,7 @@ impl Bank {
         let validator_rewards =
             (validator_rate * capitalization as f64 * epoch_duration_in_years) as u64;
 
-        let vote_balance_and_staked = self.stakes.read().unwrap().vote_balance_and_staked();
+        let old_vote_balance_and_staked = self.stakes.read().unwrap().vote_balance_and_staked();
 
         let validator_point_value = self.pay_validator_rewards(validator_rewards);
 
@@ -1256,15 +1290,15 @@ impl Bank {
         {
             // this sysvar can be retired once `pico_inflation` is enabled on all clusters
             self.update_sysvar_account(&sysvar::rewards::id(), |account| {
-                sysvar::rewards::create_account(
+                create_account(
+                    &sysvar::rewards::Rewards::new(validator_point_value),
                     self.inherit_sysvar_account_balance(account),
-                    validator_point_value,
                 )
             });
         }
 
-        let validator_rewards_paid =
-            self.stakes.read().unwrap().vote_balance_and_staked() - vote_balance_and_staked;
+        let new_vote_balance_and_staked = self.stakes.read().unwrap().vote_balance_and_staked();
+        let validator_rewards_paid = new_vote_balance_and_staked - old_vote_balance_and_staked;
         assert_eq!(
             validator_rewards_paid,
             u64::try_from(
@@ -1431,7 +1465,7 @@ impl Bank {
     fn update_recent_blockhashes_locked(&self, locked_blockhash_queue: &BlockhashQueue) {
         self.update_sysvar_account(&sysvar::recent_blockhashes::id(), |account| {
             let recent_blockhash_iter = locked_blockhash_queue.get_recent_blockhashes();
-            sysvar::recent_blockhashes::create_account_with_data(
+            recent_blockhashes_account::create_account_with_data(
                 self.inherit_sysvar_account_balance(account),
                 recent_blockhash_iter,
             )
@@ -1443,7 +1477,11 @@ impl Bank {
         self.update_recent_blockhashes_locked(&blockhash_queue);
     }
 
-    fn get_timestamp_estimate(&self) -> Option<UnixTimestamp> {
+    fn get_timestamp_estimate(
+        &self,
+        estimate_type: EstimateType,
+        epoch_start_timestamp: Option<(Slot, UnixTimestamp)>,
+    ) -> Option<UnixTimestamp> {
         let mut get_timestamp_estimate_time = Measure::start("get_timestamp_estimate");
         let recent_timestamps: HashMap<Pubkey, (Slot, UnixTimestamp)> = self
             .vote_accounts()
@@ -1451,7 +1489,13 @@ impl Bank {
             .filter_map(|(pubkey, (_, account))| {
                 VoteState::from(&account).and_then(|state| {
                     let timestamp_slot = state.last_timestamp.slot;
-                    if self.slot().checked_sub(timestamp_slot)? <= TIMESTAMP_SLOT_RANGE as u64 {
+                    if (self
+                        .feature_set
+                        .is_active(&feature_set::timestamp_bounding::id())
+                        && self.ancestors.contains_key(&timestamp_slot))
+                        || self.slot().checked_sub(timestamp_slot)?
+                            <= DEPRECATED_TIMESTAMP_SLOT_RANGE as u64
+                    {
                         Some((
                             pubkey,
                             (state.last_timestamp.slot, state.last_timestamp.timestamp),
@@ -1470,6 +1514,8 @@ impl Bank {
             stakes,
             self.slot(),
             slot_duration,
+            estimate_type,
+            epoch_start_timestamp,
         );
         get_timestamp_estimate_time.stop();
         datapoint_info!(
@@ -2060,7 +2106,7 @@ impl Bank {
                     .map(|acc| (*nonce_pubkey, acc))
             })
             .filter(|(_pubkey, nonce_account)| {
-                nonce::utils::verify_nonce_account(nonce_account, &tx.message().recent_blockhash)
+                nonce_account::verify_nonce_account(nonce_account, &tx.message().recent_blockhash)
             })
     }
 
@@ -2373,6 +2419,9 @@ impl Bank {
         let mut inner_instructions: Vec<Option<InnerInstructionsList>> =
             Vec::with_capacity(txs.len());
         let mut transaction_logs: Vec<TransactionLogMessages> = Vec::with_capacity(txs.len());
+        let bpf_compute_budget = self
+            .bpf_compute_budget
+            .unwrap_or_else(|| BpfComputeBudget::new(&self.feature_set));
 
         let executed: Vec<TransactionProcessResult> = loaded_accounts
             .iter_mut()
@@ -2411,6 +2460,7 @@ impl Bank {
                         executors.clone(),
                         instruction_recorders.as_deref(),
                         self.feature_set.clone(),
+                        bpf_compute_budget,
                     );
 
                     if enable_log_recording {
@@ -2517,7 +2567,7 @@ impl Bank {
             .map(|((_, tx), (res, hash_age_kind))| {
                 let (fee_calculator, is_durable_nonce) = match hash_age_kind {
                     Some(HashAgeKind::DurableNonce(_, account)) => {
-                        (nonce::utils::fee_calculator_of(account), true)
+                        (nonce_account::fee_calculator_of(account), true)
                     }
                     _ => (
                         hash_queue
@@ -3363,7 +3413,11 @@ impl Bank {
                 .extend_from_slice(&additional_builtins.feature_builtins);
         }
         for builtin in builtins.genesis_builtins {
-            self.add_builtin(&builtin.name, builtin.id, builtin.entrypoint);
+            self.add_builtin(
+                &builtin.name,
+                builtin.id,
+                builtin.process_instruction_with_context,
+            );
         }
         self.feature_builtins = Arc::new(builtins.feature_builtins);
 
@@ -3372,6 +3426,10 @@ impl Bank {
 
     pub fn set_inflation(&self, inflation: Inflation) {
         *self.inflation.write().unwrap() = inflation;
+    }
+
+    pub fn set_bpf_compute_budget(&mut self, bpf_compute_budget: Option<BpfComputeBudget>) {
+        self.bpf_compute_budget = bpf_compute_budget;
     }
 
     pub fn hard_forks(&self) -> Arc<RwLock<HardForks>> {
@@ -3821,43 +3879,17 @@ impl Bank {
         !self.is_delta.load(Relaxed)
     }
 
-    pub fn add_builtin_program(
-        &mut self,
-        name: &str,
-        program_id: Pubkey,
-        process_instruction: ProcessInstruction,
-    ) {
-        self.add_builtin(name, program_id, Entrypoint::Program(process_instruction));
-    }
-
-    pub fn add_builtin_loader(
+    /// Add an instruction processor to intercept instructions before the dynamic loader.
+    pub fn add_builtin(
         &mut self,
         name: &str,
         program_id: Pubkey,
         process_instruction_with_context: ProcessInstructionWithContext,
     ) {
-        self.add_builtin(
-            name,
-            program_id,
-            Entrypoint::Loader(process_instruction_with_context),
-        );
-    }
-
-    /// Add an instruction processor to intercept instructions before the dynamic loader.
-    pub fn add_builtin(&mut self, name: &str, program_id: Pubkey, entrypoint: Entrypoint) {
+        debug!("Added program {} under {:?}", name, program_id);
         self.add_native_program(name, &program_id);
-        match entrypoint {
-            Entrypoint::Program(process_instruction) => {
-                self.message_processor
-                    .add_program(program_id, process_instruction);
-                debug!("Added builtin program {} under {:?}", name, program_id);
-            }
-            Entrypoint::Loader(process_instruction_with_context) => {
-                self.message_processor
-                    .add_loader(program_id, process_instruction_with_context);
-                debug!("Added builtin loader {} under {:?}", name, program_id);
-            }
-        }
+        self.message_processor
+            .add_program(program_id, process_instruction_with_context);
     }
 
     pub fn clean_accounts(&self, skip_last: bool) {
@@ -3947,33 +3979,33 @@ impl Bank {
         let slot = self.slot();
 
         for feature_id in &self.feature_set.inactive {
-            let mut activated = false;
+            let mut activated = None;
             if let Some(mut account) = self.get_account(feature_id) {
-                if let Some(mut feature) = Feature::from_account(&account) {
+                if let Some(mut feature) = feature::from_account(&account) {
                     match feature.activated_at {
                         None => {
                             if allow_new_activations {
                                 // Feature has been requested, activate it now
                                 feature.activated_at = Some(slot);
-                                if feature.to_account(&mut account).is_some() {
+                                if feature::to_account(&feature, &mut account).is_some() {
                                     self.store_account(feature_id, &account);
                                 }
                                 newly_activated.insert(*feature_id);
-                                activated = true;
+                                activated = Some(slot);
                                 info!("Feature {} activated at slot {}", feature_id, slot);
                             }
                         }
                         Some(activation_slot) => {
                             if slot >= activation_slot {
                                 // Feature is already active
-                                activated = true;
+                                activated = Some(activation_slot);
                             }
                         }
                     }
                 }
             }
-            if activated {
-                active.insert(*feature_id);
+            if let Some(slot) = activated {
+                active.insert(*feature_id, slot);
             } else {
                 inactive.insert(*feature_id);
             }
@@ -3993,7 +4025,11 @@ impl Bank {
             let should_populate = init_or_warp && self.feature_set.is_active(&feature)
                 || !init_or_warp && new_feature_activations.contains(&feature);
             if should_populate {
-                self.add_builtin(&builtin.name, builtin.id, builtin.entrypoint);
+                self.add_builtin(
+                    &builtin.name,
+                    builtin.id,
+                    builtin.process_instruction_with_context,
+                );
             }
         }
     }
@@ -4123,19 +4159,20 @@ mod tests {
             BOOTSTRAP_VALIDATOR_LAMPORTS,
         },
         native_loader::NativeLoaderError,
-        process_instruction::InvokeContext,
         status_cache::MAX_CACHE_ENTRIES,
     };
     use solana_sdk::{
         account_utils::StateMut,
         clock::{DEFAULT_SLOTS_PER_EPOCH, DEFAULT_TICKS_PER_SLOT},
         epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
+        feature::Feature,
         genesis_config::create_genesis_config,
         instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
         keyed_account::KeyedAccount,
         message::{Message, MessageHeader},
         nonce,
         poh_config::PohConfig,
+        process_instruction::InvokeContext,
         rent::Rent,
         signature::{Keypair, Signer},
         system_instruction::{self, SystemError},
@@ -4213,7 +4250,7 @@ mod tests {
         );
 
         let rent_account = bank.get_account(&sysvar::rent::id()).unwrap();
-        let rent = sysvar::rent::Rent::from_account(&rent_account).unwrap();
+        let rent = from_account::<sysvar::rent::Rent>(&rent_account).unwrap();
 
         assert_eq!(rent.burn_percent, 5);
         assert_eq!(rent.exemption_threshold, 1.2);
@@ -4426,6 +4463,7 @@ mod tests {
         _program_id: &Pubkey,
         keyed_accounts: &[KeyedAccount],
         data: &[u8],
+        _invoke_context: &mut dyn InvokeContext,
     ) -> result::Result<(), InstructionError> {
         if let Ok(instruction) = bincode::deserialize(data) {
             match instruction {
@@ -4575,7 +4613,7 @@ mod tests {
             ) as u64,
         );
         bank.rent_collector.slots_per_year = 421_812.0;
-        bank.add_builtin_program("mock_program", mock_program_id, mock_process_instruction);
+        bank.add_builtin("mock_program", mock_program_id, mock_process_instruction);
 
         bank
     }
@@ -5902,7 +5940,7 @@ mod tests {
 
         let rewards = bank1
             .get_account(&sysvar::rewards::id())
-            .map(|account| Rewards::from_account(&account).unwrap())
+            .map(|account| from_account::<Rewards>(&account).unwrap())
             .unwrap();
 
         // verify the stake and vote accounts are the right size
@@ -6030,7 +6068,7 @@ mod tests {
         // The same reward should be distributed given same credits
         let expected_capitalization = do_test_bank_update_rewards_determinism();
         // Repeat somewhat large number of iterations to expose possible different behavior
-        // depending on the randamly-seeded HashMap ordering
+        // depending on the randomly-seeded HashMap ordering
         for _ in 0..30 {
             let actual_capitalization = do_test_bank_update_rewards_determinism();
             assert_eq!(actual_capitalization, expected_capitalization);
@@ -7185,56 +7223,63 @@ mod tests {
         let bank1 = Arc::new(Bank::new(&genesis_config));
         bank1.update_sysvar_account(&dummy_clock_id, |optional_account| {
             assert!(optional_account.is_none());
-            Clock {
-                slot: expected_previous_slot,
-                ..Clock::default()
-            }
-            .create_account(1)
+
+            create_account(
+                &Clock {
+                    slot: expected_previous_slot,
+                    ..Clock::default()
+                },
+                1,
+            )
         });
         let current_account = bank1.get_account(&dummy_clock_id).unwrap();
         assert_eq!(
             expected_previous_slot,
-            Clock::from_account(&current_account).unwrap().slot
+            from_account::<Clock>(&current_account).unwrap().slot
         );
 
         // Updating should increment the clock's slot
         let bank2 = Arc::new(Bank::new_from_parent(&bank1, &Pubkey::default(), 1));
         bank2.update_sysvar_account(&dummy_clock_id, |optional_account| {
-            let slot = Clock::from_account(optional_account.as_ref().unwrap())
+            let slot = from_account::<Clock>(optional_account.as_ref().unwrap())
                 .unwrap()
                 .slot
                 + 1;
 
-            Clock {
-                slot,
-                ..Clock::default()
-            }
-            .create_account(1)
+            create_account(
+                &Clock {
+                    slot,
+                    ..Clock::default()
+                },
+                1,
+            )
         });
         let current_account = bank2.get_account(&dummy_clock_id).unwrap();
         assert_eq!(
             expected_next_slot,
-            Clock::from_account(&current_account).unwrap().slot
+            from_account::<Clock>(&current_account).unwrap().slot
         );
 
         // Updating again should give bank1's sysvar to the closure not bank2's.
         // Thus, assert with same expected_next_slot as previously
         bank2.update_sysvar_account(&dummy_clock_id, |optional_account| {
-            let slot = Clock::from_account(optional_account.as_ref().unwrap())
+            let slot = from_account::<Clock>(optional_account.as_ref().unwrap())
                 .unwrap()
                 .slot
                 + 1;
 
-            Clock {
-                slot,
-                ..Clock::default()
-            }
-            .create_account(1)
+            create_account(
+                &Clock {
+                    slot,
+                    ..Clock::default()
+                },
+                1,
+            )
         });
         let current_account = bank2.get_account(&dummy_clock_id).unwrap();
         assert_eq!(
             expected_next_slot,
-            Clock::from_account(&current_account).unwrap().slot
+            from_account::<Clock>(&current_account).unwrap().slot
         );
     }
 
@@ -7581,7 +7626,7 @@ mod tests {
         let bank = Arc::new(Bank::new(&genesis_config));
 
         let fees_account = bank.get_account(&sysvar::fees::id()).unwrap();
-        let fees = Fees::from_account(&fees_account).unwrap();
+        let fees = from_account::<Fees>(&fees_account).unwrap();
         assert_eq!(
             bank.fee_calculator.lamports_per_signature,
             fees.fee_calculator.lamports_per_signature
@@ -7704,7 +7749,7 @@ mod tests {
     }
 
     #[test]
-    fn test_add_builtin_program() {
+    fn test_add_builtin() {
         let (genesis_config, mint_keypair) = create_genesis_config(500);
         let mut bank = Bank::new(&genesis_config);
 
@@ -7715,6 +7760,7 @@ mod tests {
             program_id: &Pubkey,
             _keyed_accounts: &[KeyedAccount],
             _instruction_data: &[u8],
+            _invoke_context: &mut dyn InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
             if mock_vote_program_id() != *program_id {
                 return Err(InstructionError::IncorrectProgramId);
@@ -7723,7 +7769,7 @@ mod tests {
         }
 
         assert!(bank.get_account(&mock_vote_program_id()).is_none());
-        bank.add_builtin_program(
+        bank.add_builtin(
             "mock_vote_program",
             mock_vote_program_id(),
             mock_vote_processor,
@@ -7772,6 +7818,7 @@ mod tests {
             _pubkey: &Pubkey,
             _ka: &[KeyedAccount],
             _data: &[u8],
+            _invoke_context: &mut dyn InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
             Err(InstructionError::Custom(42))
         }
@@ -7796,7 +7843,7 @@ mod tests {
         );
 
         let vote_loader_account = bank.get_account(&solana_vote_program::id()).unwrap();
-        bank.add_builtin_program(
+        bank.add_builtin(
             "solana_vote_program",
             solana_vote_program::id(),
             mock_vote_processor,
@@ -7822,6 +7869,7 @@ mod tests {
             _pubkey: &Pubkey,
             _ka: &[KeyedAccount],
             _data: &[u8],
+            _invoke_context: &mut dyn InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
             Err(InstructionError::Custom(42))
         }
@@ -7841,15 +7889,15 @@ mod tests {
         assert!(!bank.stakes.read().unwrap().stake_delegations().is_empty());
         assert_eq!(bank.calculate_capitalization(), bank.capitalization());
 
-        bank.add_builtin_program("mock_program1", vote_id, mock_ix_processor);
-        bank.add_builtin_program("mock_program2", stake_id, mock_ix_processor);
+        bank.add_builtin("mock_program1", vote_id, mock_ix_processor);
+        bank.add_builtin("mock_program2", stake_id, mock_ix_processor);
         assert!(bank.stakes.read().unwrap().vote_accounts().is_empty());
         assert!(bank.stakes.read().unwrap().stake_delegations().is_empty());
         assert_eq!(bank.calculate_capitalization(), bank.capitalization());
 
         // Re-adding builtin programs should be no-op
-        bank.add_builtin_program("mock_program1", vote_id, mock_ix_processor);
-        bank.add_builtin_program("mock_program2", stake_id, mock_ix_processor);
+        bank.add_builtin("mock_program1", vote_id, mock_ix_processor);
+        bank.add_builtin("mock_program2", stake_id, mock_ix_processor);
         assert!(bank.stakes.read().unwrap().vote_accounts().is_empty());
         assert!(bank.stakes.read().unwrap().stake_delegations().is_empty());
         assert_eq!(bank.calculate_capitalization(), bank.capitalization());
@@ -7862,7 +7910,8 @@ mod tests {
         for i in 1..5 {
             let bhq_account = bank.get_account(&sysvar::recent_blockhashes::id()).unwrap();
             let recent_blockhashes =
-                sysvar::recent_blockhashes::RecentBlockhashes::from_account(&bhq_account).unwrap();
+                from_account::<sysvar::recent_blockhashes::RecentBlockhashes>(&bhq_account)
+                    .unwrap();
             // Check length
             assert_eq!(recent_blockhashes.len(), i);
             let most_recent_hash = recent_blockhashes.iter().next().unwrap().blockhash;
@@ -7881,7 +7930,7 @@ mod tests {
 
         let bhq_account = bank.get_account(&sysvar::recent_blockhashes::id()).unwrap();
         let recent_blockhashes =
-            sysvar::recent_blockhashes::RecentBlockhashes::from_account(&bhq_account).unwrap();
+            from_account::<sysvar::recent_blockhashes::RecentBlockhashes>(&bhq_account).unwrap();
 
         let sysvar_recent_blockhash = recent_blockhashes[0].blockhash;
         let bank_last_blockhash = bank.last_blockhash();
@@ -8489,6 +8538,7 @@ mod tests {
             _program_id: &Pubkey,
             keyed_accounts: &[KeyedAccount],
             data: &[u8],
+            _invoke_context: &mut dyn InvokeContext,
         ) -> result::Result<(), InstructionError> {
             let lamports = data[0] as u64;
             {
@@ -8503,7 +8553,7 @@ mod tests {
         }
 
         let mock_program_id = Pubkey::new(&[2u8; 32]);
-        bank.add_builtin_program("mock_program", mock_program_id, mock_process_instruction);
+        bank.add_builtin("mock_program", mock_program_id, mock_process_instruction);
 
         let from_pubkey = solana_sdk::pubkey::new_rand();
         let to_pubkey = solana_sdk::pubkey::new_rand();
@@ -8541,12 +8591,13 @@ mod tests {
             _program_id: &Pubkey,
             _keyed_accounts: &[KeyedAccount],
             _data: &[u8],
+            _invoke_context: &mut dyn InvokeContext,
         ) -> result::Result<(), InstructionError> {
             Ok(())
         }
 
         let mock_program_id = Pubkey::new(&[2u8; 32]);
-        bank.add_builtin_program("mock_program", mock_program_id, mock_process_instruction);
+        bank.add_builtin("mock_program", mock_program_id, mock_process_instruction);
 
         let from_pubkey = solana_sdk::pubkey::new_rand();
         let to_pubkey = solana_sdk::pubkey::new_rand();
@@ -8598,7 +8649,7 @@ mod tests {
 
         tx.message.account_keys.push(solana_sdk::pubkey::new_rand());
 
-        bank.add_builtin_program(
+        bank.add_builtin(
             "mock_vote",
             solana_vote_program::id(),
             mock_ok_vote_processor,
@@ -8652,7 +8703,7 @@ mod tests {
             AccountMeta::new(to_pubkey, false),
         ];
 
-        bank.add_builtin_program(
+        bank.add_builtin(
             "mock_vote",
             solana_vote_program::id(),
             mock_ok_vote_processor,
@@ -8685,7 +8736,7 @@ mod tests {
             AccountMeta::new(to_pubkey, false),
         ];
 
-        bank.add_builtin_program(
+        bank.add_builtin(
             "mock_vote",
             solana_vote_program::id(),
             mock_ok_vote_processor,
@@ -8723,6 +8774,7 @@ mod tests {
         _pubkey: &Pubkey,
         _ka: &[KeyedAccount],
         _data: &[u8],
+        _invoke_context: &mut dyn InvokeContext,
     ) -> std::result::Result<(), InstructionError> {
         Ok(())
     }
@@ -8740,7 +8792,7 @@ mod tests {
             AccountMeta::new(to_pubkey, false),
         ];
 
-        bank.add_builtin_program(
+        bank.add_builtin(
             "mock_vote",
             solana_vote_program::id(),
             mock_ok_vote_processor,
@@ -8776,7 +8828,7 @@ mod tests {
             .map(|i| {
                 let key = solana_sdk::pubkey::new_rand();
                 let name = format!("program{:?}", i);
-                bank.add_builtin_program(&name, key, mock_ok_vote_processor);
+                bank.add_builtin(&name, key, mock_ok_vote_processor);
                 (key, name.as_bytes().to_vec())
             })
             .collect();
@@ -8972,6 +9024,7 @@ mod tests {
             _program_id: &Pubkey,
             keyed_accounts: &[KeyedAccount],
             _data: &[u8],
+            _invoke_context: &mut dyn InvokeContext,
         ) -> result::Result<(), InstructionError> {
             assert_eq!(42, keyed_accounts[0].lamports().unwrap());
             let mut account = keyed_accounts[0].try_account_ref_mut()?;
@@ -8984,7 +9037,7 @@ mod tests {
 
         // Add a new program
         let program1_pubkey = solana_sdk::pubkey::new_rand();
-        bank.add_builtin_program("program", program1_pubkey, nested_processor);
+        bank.add_builtin("program", program1_pubkey, nested_processor);
 
         // Add a new program owned by the first
         let program2_pubkey = solana_sdk::pubkey::new_rand();
@@ -9146,13 +9199,14 @@ mod tests {
     }
 
     #[test]
-    fn test_add_builtin_program_no_overwrite() {
+    fn test_add_builtin_no_overwrite() {
         let (genesis_config, _mint_keypair) = create_genesis_config(100_000);
 
         fn mock_ix_processor(
             _pubkey: &Pubkey,
             _ka: &[KeyedAccount],
             _data: &[u8],
+            _invoke_context: &mut dyn InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
             Ok(())
         }
@@ -9167,19 +9221,15 @@ mod tests {
         ));
         assert_eq!(bank.get_account_modified_slot(&program_id), None);
 
-        Arc::get_mut(&mut bank).unwrap().add_builtin_program(
-            "mock_program",
-            program_id,
-            mock_ix_processor,
-        );
+        Arc::get_mut(&mut bank)
+            .unwrap()
+            .add_builtin("mock_program", program_id, mock_ix_processor);
         assert_eq!(bank.get_account_modified_slot(&program_id).unwrap().1, slot);
 
         let mut bank = Arc::new(new_from_parent(&bank));
-        Arc::get_mut(&mut bank).unwrap().add_builtin_program(
-            "mock_program",
-            program_id,
-            mock_ix_processor,
-        );
+        Arc::get_mut(&mut bank)
+            .unwrap()
+            .add_builtin("mock_program", program_id, mock_ix_processor);
         assert_eq!(bank.get_account_modified_slot(&program_id).unwrap().1, slot);
     }
 
@@ -9206,19 +9256,15 @@ mod tests {
         ));
         assert_eq!(bank.get_account_modified_slot(&loader_id), None);
 
-        Arc::get_mut(&mut bank).unwrap().add_builtin_loader(
-            "mock_program",
-            loader_id,
-            mock_ix_processor,
-        );
+        Arc::get_mut(&mut bank)
+            .unwrap()
+            .add_builtin("mock_program", loader_id, mock_ix_processor);
         assert_eq!(bank.get_account_modified_slot(&loader_id).unwrap().1, slot);
 
         let mut bank = Arc::new(new_from_parent(&bank));
-        Arc::get_mut(&mut bank).unwrap().add_builtin_loader(
-            "mock_program",
-            loader_id,
-            mock_ix_processor,
-        );
+        Arc::get_mut(&mut bank)
+            .unwrap()
+            .add_builtin("mock_program", loader_id, mock_ix_processor);
         assert_eq!(bank.get_account_modified_slot(&loader_id).unwrap().1, slot);
     }
 
@@ -9588,13 +9634,13 @@ mod tests {
         // Request `test_feature` activation
         let feature = Feature::default();
         assert_eq!(feature.activated_at, None);
-        bank.store_account(&test_feature, &feature.create_account(42));
+        bank.store_account(&test_feature, &feature::create_account(&feature, 42));
 
         // Run `compute_active_feature_set` disallowing new activations
         let new_activations = bank.compute_active_feature_set(false);
         assert!(new_activations.is_empty());
         assert!(!bank.feature_set.is_active(&test_feature));
-        let feature = Feature::from_account(&bank.get_account(&test_feature).expect("get_account"))
+        let feature = feature::from_account(&bank.get_account(&test_feature).expect("get_account"))
             .expect("from_account");
         assert_eq!(feature.activated_at, None);
 
@@ -9602,7 +9648,7 @@ mod tests {
         let new_activations = bank.compute_active_feature_set(true);
         assert_eq!(new_activations.len(), 1);
         assert!(bank.feature_set.is_active(&test_feature));
-        let feature = Feature::from_account(&bank.get_account(&test_feature).expect("get_account"))
+        let feature = feature::from_account(&bank.get_account(&test_feature).expect("get_account"))
             .expect("from_account");
         assert_eq!(feature.activated_at, Some(1));
 
@@ -9655,7 +9701,7 @@ mod tests {
         let validator_vote_keypairs1 = ValidatorVoteKeypairs::new_rand();
         let validator_keypairs = vec![&validator_vote_keypairs0, &validator_vote_keypairs1];
         let GenesisConfigInfo {
-            genesis_config,
+            mut genesis_config,
             mint_keypair: _,
             voting_keypair: _,
         } = create_genesis_config_with_vote_accounts(
@@ -9663,8 +9709,15 @@ mod tests {
             &validator_keypairs,
             vec![10_000; 2],
         );
+        genesis_config
+            .accounts
+            .remove(&feature_set::timestamp_bounding::id())
+            .unwrap();
         let mut bank = Bank::new(&genesis_config);
-        assert_eq!(bank.get_timestamp_estimate(), Some(0));
+        assert_eq!(
+            bank.get_timestamp_estimate(EstimateType::Unbounded, None),
+            Some(0)
+        );
 
         let recent_timestamp: UnixTimestamp = bank.unix_timestamp_from_genesis();
         update_vote_account_timestamp(
@@ -9685,7 +9738,7 @@ mod tests {
             &validator_vote_keypairs1.vote_keypair.pubkey(),
         );
         assert_eq!(
-            bank.get_timestamp_estimate(),
+            bank.get_timestamp_estimate(EstimateType::Unbounded, None),
             Some(recent_timestamp + additional_secs / 2)
         );
 
@@ -9694,14 +9747,17 @@ mod tests {
         }
         let adjustment = (bank.ns_per_slot as u64 * bank.slot()) / 1_000_000_000;
         assert_eq!(
-            bank.get_timestamp_estimate(),
+            bank.get_timestamp_estimate(EstimateType::Unbounded, None),
             Some(recent_timestamp + adjustment as i64 + additional_secs / 2)
         );
 
         for _ in 0..7 {
             bank = new_from_parent(&Arc::new(bank));
         }
-        assert_eq!(bank.get_timestamp_estimate(), None);
+        assert_eq!(
+            bank.get_timestamp_estimate(EstimateType::Unbounded, None),
+            None
+        );
     }
 
     #[test]
@@ -9715,6 +9771,10 @@ mod tests {
         genesis_config
             .accounts
             .remove(&feature_set::timestamp_correction::id())
+            .unwrap();
+        genesis_config
+            .accounts
+            .remove(&feature_set::timestamp_bounding::id())
             .unwrap();
         let bank = Bank::new(&genesis_config);
 
@@ -9731,29 +9791,147 @@ mod tests {
 
         // Bank::new_from_parent should not adjust timestamp before feature activation
         let mut bank = new_from_parent(&Arc::new(bank));
-        let clock =
-            sysvar::clock::Clock::from_account(&bank.get_account(&sysvar::clock::id()).unwrap())
-                .unwrap();
-        assert_eq!(clock.unix_timestamp, bank.unix_timestamp_from_genesis());
+        assert_eq!(
+            bank.clock().unix_timestamp,
+            bank.unix_timestamp_from_genesis()
+        );
 
         // Request `timestamp_correction` activation
-        let feature = Feature {
-            activated_at: Some(bank.slot),
-        };
         bank.store_account(
             &feature_set::timestamp_correction::id(),
-            &feature.create_account(42),
+            &feature::create_account(
+                &Feature {
+                    activated_at: Some(bank.slot),
+                },
+                42,
+            ),
         );
         bank.compute_active_feature_set(true);
 
         // Now Bank::new_from_parent should adjust timestamp
         let bank = Arc::new(new_from_parent(&Arc::new(bank)));
-        let clock =
-            sysvar::clock::Clock::from_account(&bank.get_account(&sysvar::clock::id()).unwrap())
-                .unwrap();
         assert_eq!(
-            clock.unix_timestamp,
+            bank.clock().unix_timestamp,
             bank.unix_timestamp_from_genesis() + additional_secs
+        );
+    }
+
+    #[test]
+    fn test_timestamp_bounding_feature() {
+        let leader_pubkey = solana_sdk::pubkey::new_rand();
+        let GenesisConfigInfo {
+            mut genesis_config,
+            voting_keypair,
+            ..
+        } = create_genesis_config_with_leader(5, &leader_pubkey, 3);
+        let slots_in_epoch = 32;
+        genesis_config
+            .accounts
+            .remove(&feature_set::timestamp_bounding::id())
+            .unwrap();
+        genesis_config.epoch_schedule = EpochSchedule::new(slots_in_epoch);
+        let bank = Bank::new(&genesis_config);
+
+        let recent_timestamp: UnixTimestamp = bank.unix_timestamp_from_genesis();
+        let additional_secs = 1;
+        update_vote_account_timestamp(
+            BlockTimestamp {
+                slot: bank.slot(),
+                timestamp: recent_timestamp + additional_secs,
+            },
+            &bank,
+            &voting_keypair.pubkey(),
+        );
+
+        // Bank::new_from_parent should allow unbounded timestamp before activation
+        let mut bank = new_from_parent(&Arc::new(bank));
+        assert_eq!(
+            bank.clock().unix_timestamp,
+            bank.unix_timestamp_from_genesis() + additional_secs
+        );
+
+        // Bank::new_from_parent should not allow epoch_start_timestamp to be set before activation
+        bank.update_clock(Some(0));
+        assert_eq!(
+            bank.clock().epoch_start_timestamp,
+            Bank::get_unused_from_slot(bank.slot(), bank.unused) as i64
+        );
+
+        // Request `timestamp_bounding` activation
+        let feature = Feature { activated_at: None };
+        bank.store_account(
+            &feature_set::timestamp_bounding::id(),
+            &feature::create_account(&feature, 42),
+        );
+        for _ in 0..30 {
+            bank = new_from_parent(&Arc::new(bank));
+        }
+
+        // Refresh vote timestamp
+        let recent_timestamp: UnixTimestamp = bank.unix_timestamp_from_genesis();
+        let additional_secs = 1;
+        update_vote_account_timestamp(
+            BlockTimestamp {
+                slot: bank.slot(),
+                timestamp: recent_timestamp + additional_secs,
+            },
+            &bank,
+            &voting_keypair.pubkey(),
+        );
+
+        // Advance to epoch boundary to activate
+        bank = new_from_parent(&Arc::new(bank));
+
+        // Bank::new_from_parent is bounding, but should not use epoch_start_timestamp in activation slot
+        assert_eq!(
+            bank.clock().unix_timestamp,
+            bank.unix_timestamp_from_genesis() + additional_secs
+        );
+
+        assert_eq!(
+            bank.clock().epoch_start_timestamp,
+            bank.unix_timestamp_from_genesis() + additional_secs
+        );
+
+        // Past activation slot, bounding should use epoch_start_timestamp in activation slot
+        bank = new_from_parent(&Arc::new(bank));
+        assert_eq!(
+            bank.clock().unix_timestamp,
+            bank.unix_timestamp_from_genesis()
+        );
+
+        for _ in 0..30 {
+            bank = new_from_parent(&Arc::new(bank));
+        }
+
+        // Refresh vote timestamp
+        let recent_timestamp: UnixTimestamp = bank.unix_timestamp_from_genesis();
+        let additional_secs = 20;
+        update_vote_account_timestamp(
+            BlockTimestamp {
+                slot: bank.slot(),
+                timestamp: recent_timestamp + additional_secs,
+            },
+            &bank,
+            &voting_keypair.pubkey(),
+        );
+
+        // Advance to epoch boundary
+        bank = new_from_parent(&Arc::new(bank));
+
+        // Past activation slot, bounding should use previous epoch_start_timestamp on epoch boundary slots
+        assert_eq!(
+            bank.clock().unix_timestamp,
+            bank.unix_timestamp_from_genesis() // Plus estimated offset + 25%
+                + ((slots_in_epoch as u32 * Duration::from_nanos(bank.ns_per_slot as u64))
+                    .as_secs()
+                    * 25
+                    / 100) as i64,
+        );
+
+        assert_eq!(
+            bank.clock().epoch_start_timestamp,
+            bank.clock().unix_timestamp
         );
     }
 
@@ -9765,13 +9943,13 @@ mod tests {
             voting_keypair,
             ..
         } = create_genesis_config_with_leader(5, &leader_pubkey, 3);
-        let bank = Bank::new(&genesis_config);
+        let mut bank = Bank::new(&genesis_config);
         assert_eq!(
             bank.clock().unix_timestamp,
             bank.unix_timestamp_from_genesis()
         );
 
-        bank.update_clock();
+        bank.update_clock(None);
         assert_eq!(
             bank.clock().unix_timestamp,
             bank.unix_timestamp_from_genesis()
@@ -9785,7 +9963,7 @@ mod tests {
             &bank,
             &voting_keypair.pubkey(),
         );
-        bank.update_clock();
+        bank.update_clock(None);
         assert_eq!(
             bank.clock().unix_timestamp,
             bank.unix_timestamp_from_genesis()
@@ -9799,7 +9977,7 @@ mod tests {
             &bank,
             &voting_keypair.pubkey(),
         );
-        bank.update_clock();
+        bank.update_clock(None);
         assert_eq!(
             bank.clock().unix_timestamp,
             bank.unix_timestamp_from_genesis()
@@ -9813,10 +9991,26 @@ mod tests {
             &bank,
             &voting_keypair.pubkey(),
         );
-        bank.update_clock();
+        bank.update_clock(None);
         assert_eq!(
             bank.clock().unix_timestamp,
             bank.unix_timestamp_from_genesis() + 1
+        );
+
+        // Timestamp cannot go backward from ancestor Bank to child
+        bank = new_from_parent(&Arc::new(bank));
+        update_vote_account_timestamp(
+            BlockTimestamp {
+                slot: bank.slot(),
+                timestamp: bank.unix_timestamp_from_genesis() - 1,
+            },
+            &bank,
+            &voting_keypair.pubkey(),
+        );
+        bank.update_clock(None);
+        assert_eq!(
+            bank.clock().unix_timestamp,
+            bank.unix_timestamp_from_genesis()
         );
     }
 
@@ -10051,26 +10245,5 @@ mod tests {
         bank.finish_init(&genesis_config, None);
         let debug = format!("{:#?}", bank);
         assert!(!debug.is_empty());
-    }
-
-    #[test]
-    fn test_debug_entrypoint() {
-        fn mock_process_instruction(
-            _program_id: &Pubkey,
-            _keyed_accounts: &[KeyedAccount],
-            _data: &[u8],
-        ) -> std::result::Result<(), InstructionError> {
-            Ok(())
-        }
-        fn mock_ix_processor(
-            _pubkey: &Pubkey,
-            _ka: &[KeyedAccount],
-            _data: &[u8],
-            _context: &mut dyn InvokeContext,
-        ) -> std::result::Result<(), InstructionError> {
-            Ok(())
-        }
-        assert!(!format!("{:?}", Entrypoint::Program(mock_process_instruction)).is_empty());
-        assert!(!format!("{:?}", Entrypoint::Loader(mock_ix_processor)).is_empty());
     }
 }

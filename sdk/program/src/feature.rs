@@ -1,8 +1,4 @@
-use solana_sdk::{account::Account, clock::Slot};
-
-solana_sdk::declare_id!("Feature111111111111111111111111111111111111");
-
-/// The `Feature` struct is the on-chain representation of a runtime feature.
+/// Runtime features.
 ///
 /// Feature activation is accomplished by:
 /// 1. Activation is requested by the feature authority, who issues a transaction to create the
@@ -11,6 +7,13 @@ solana_sdk::declare_id!("Feature111111111111111111111111111111111111");
 /// 2. When the next epoch is entered the runtime will check for new activation requests and
 ///    active them.  When this occurs, the activation slot is recorded in the feature account
 ///
+use crate::{
+    account_info::AccountInfo, clock::Slot, instruction::Instruction, program_error::ProgramError,
+    pubkey::Pubkey, rent::Rent, system_instruction,
+};
+
+crate::declare_id!("Feature111111111111111111111111111111111111");
+
 #[derive(Default, Debug, Serialize, Deserialize, PartialEq)]
 pub struct Feature {
     pub activated_at: Option<Slot>,
@@ -18,41 +21,45 @@ pub struct Feature {
 
 impl Feature {
     pub fn size_of() -> usize {
-        bincode::serialized_size(&Self {
+        bincode::serialized_size(&Feature {
             activated_at: Some(0),
         })
         .unwrap() as usize
     }
-    pub fn from_account(account: &Account) -> Option<Self> {
-        if account.owner != id() {
-            None
-        } else {
-            bincode::deserialize(&account.data).ok()
+
+    pub fn from_account_info(account_info: &AccountInfo) -> Result<Self, ProgramError> {
+        if *account_info.owner != id() {
+            return Err(ProgramError::InvalidArgument);
         }
+        bincode::deserialize(&account_info.data.borrow()).map_err(|_| ProgramError::InvalidArgument)
     }
-    pub fn to_account(&self, account: &mut Account) -> Option<()> {
-        bincode::serialize_into(&mut account.data[..], self).ok()
-    }
-    pub fn create_account(&self, lamports: u64) -> Account {
-        let data_len = Self::size_of().max(bincode::serialized_size(self).unwrap() as usize);
-        let mut account = Account::new(lamports, data_len, &id());
-        self.to_account(&mut account).unwrap();
-        account
-    }
+}
+
+/// Activate a feature
+pub fn activate(feature_id: &Pubkey, funding_address: &Pubkey, rent: &Rent) -> Vec<Instruction> {
+    activate_with_lamports(
+        feature_id,
+        funding_address,
+        rent.minimum_balance(Feature::size_of()),
+    )
+}
+
+pub fn activate_with_lamports(
+    feature_id: &Pubkey,
+    funding_address: &Pubkey,
+    lamports: u64,
+) -> Vec<Instruction> {
+    vec![
+        system_instruction::transfer(funding_address, feature_id, lamports),
+        system_instruction::allocate(feature_id, Feature::size_of() as u64),
+        system_instruction::assign(feature_id, &id()),
+    ]
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
-
-    #[test]
-    fn feature_deserialize_none() {
-        let just_initialized = Account::new(42, Feature::size_of(), &id());
-        assert_eq!(
-            Feature::from_account(&just_initialized),
-            Some(Feature { activated_at: None })
-        );
-    }
+    use solana_program::clock::Slot;
 
     #[test]
     fn feature_sizeof() {

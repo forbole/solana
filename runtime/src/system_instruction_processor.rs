@@ -6,6 +6,7 @@ use solana_sdk::{
     keyed_account::{from_keyed_account, get_signers, next_keyed_account, KeyedAccount},
     nonce,
     nonce_keyed_account::NonceKeyedAccount,
+    process_instruction::InvokeContext,
     program_utils::limited_deserialize,
     pubkey::Pubkey,
     system_instruction::{SystemError, SystemInstruction, MAX_PERMITTED_DATA_LENGTH},
@@ -213,6 +214,7 @@ pub fn process_instruction(
     _owner: &Pubkey,
     keyed_accounts: &[KeyedAccount],
     instruction_data: &[u8],
+    _invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
     let instruction = limited_deserialize(instruction_data)?;
 
@@ -356,14 +358,16 @@ mod tests {
     use crate::{bank::Bank, bank_client::BankClient};
     use bincode::serialize;
     use solana_sdk::{
-        account::Account,
+        account::{self, Account},
         client::SyncClient,
         fee_calculator::FeeCalculator,
         genesis_config::create_genesis_config,
         hash::{hash, Hash},
         instruction::{AccountMeta, Instruction, InstructionError},
         message::Message,
-        nonce,
+        nonce, nonce_account,
+        process_instruction::MockInvokeContext,
+        recent_blockhashes_account,
         signature::{Keypair, Signer},
         system_instruction, system_program, sysvar,
         sysvar::recent_blockhashes::IterItem,
@@ -381,11 +385,24 @@ mod tests {
         }
     }
 
+    fn process_instruction(
+        owner: &Pubkey,
+        keyed_accounts: &[KeyedAccount],
+        instruction_data: &[u8],
+    ) -> Result<(), InstructionError> {
+        super::process_instruction(
+            owner,
+            keyed_accounts,
+            instruction_data,
+            &mut MockInvokeContext::default(),
+        )
+    }
+
     fn create_default_account() -> RefCell<Account> {
         RefCell::new(Account::default())
     }
     fn create_default_recent_blockhashes_account() -> RefCell<Account> {
-        RefCell::new(sysvar::recent_blockhashes::create_account_with_data(
+        RefCell::new(recent_blockhashes_account::create_account_with_data(
             1,
             vec![
                 IterItem(0u64, &Hash::default(), &FeeCalculator::default());
@@ -395,7 +412,7 @@ mod tests {
         ))
     }
     fn create_default_rent_account() -> RefCell<Account> {
-        RefCell::new(sysvar::rent::create_account(1, &Rent::free()))
+        RefCell::new(account::create_account(&Rent::free(), 1))
     }
 
     #[test]
@@ -1180,7 +1197,7 @@ mod tests {
                 RefCell::new(if sysvar::recent_blockhashes::check_id(&meta.pubkey) {
                     create_default_recent_blockhashes_account().into_inner()
                 } else if sysvar::rent::check_id(&meta.pubkey) {
-                    sysvar::rent::create_account(1, &Rent::free())
+                    account::create_account(&Rent::free(), 1)
                 } else {
                     Account::default()
                 })
@@ -1194,7 +1211,7 @@ mod tests {
                 .zip(accounts.iter())
                 .map(|(meta, account)| KeyedAccount::new(&meta.pubkey, meta.is_signer, account))
                 .collect();
-            super::process_instruction(&Pubkey::default(), &keyed_accounts, &instruction.data)
+            process_instruction(&Pubkey::default(), &keyed_accounts, &instruction.data)
         }
     }
 
@@ -1212,7 +1229,7 @@ mod tests {
     #[test]
     fn test_process_nonce_ix_no_keyed_accs_fail() {
         assert_eq!(
-            super::process_instruction(
+            process_instruction(
                 &Pubkey::default(),
                 &[],
                 &serialize(&SystemInstruction::AdvanceNonceAccount).unwrap()
@@ -1224,7 +1241,7 @@ mod tests {
     #[test]
     fn test_process_nonce_ix_only_nonce_acc_fail() {
         assert_eq!(
-            super::process_instruction(
+            process_instruction(
                 &Pubkey::default(),
                 &[KeyedAccount::new(
                     &Pubkey::default(),
@@ -1240,7 +1257,7 @@ mod tests {
     #[test]
     fn test_process_nonce_ix_bad_recent_blockhash_state_fail() {
         assert_eq!(
-            super::process_instruction(
+            process_instruction(
                 &Pubkey::default(),
                 &[
                     KeyedAccount::new(&Pubkey::default(), true, &create_default_account()),
@@ -1258,8 +1275,8 @@ mod tests {
 
     #[test]
     fn test_process_nonce_ix_ok() {
-        let nonce_acc = nonce::create_account(1_000_000);
-        super::process_instruction(
+        let nonce_acc = nonce_account::create_account(1_000_000);
+        process_instruction(
             &Pubkey::default(),
             &[
                 KeyedAccount::new(&Pubkey::default(), true, &nonce_acc),
@@ -1273,8 +1290,8 @@ mod tests {
             &serialize(&SystemInstruction::InitializeNonceAccount(Pubkey::default())).unwrap(),
         )
         .unwrap();
-        let new_recent_blockhashes_account =
-            RefCell::new(sysvar::recent_blockhashes::create_account_with_data(
+        let new_recent_blockhashes_account = RefCell::new(
+            solana_sdk::recent_blockhashes_account::create_account_with_data(
                 1,
                 vec![
                     IterItem(
@@ -1285,9 +1302,10 @@ mod tests {
                     sysvar::recent_blockhashes::MAX_ENTRIES
                 ]
                 .into_iter(),
-            ));
+            ),
+        );
         assert_eq!(
-            super::process_instruction(
+            process_instruction(
                 &Pubkey::default(),
                 &[
                     KeyedAccount::new(&Pubkey::default(), true, &nonce_acc,),
@@ -1319,7 +1337,7 @@ mod tests {
     #[test]
     fn test_process_withdraw_ix_no_keyed_accs_fail() {
         assert_eq!(
-            super::process_instruction(
+            process_instruction(
                 &Pubkey::default(),
                 &[],
                 &serialize(&SystemInstruction::WithdrawNonceAccount(42)).unwrap(),
@@ -1331,7 +1349,7 @@ mod tests {
     #[test]
     fn test_process_withdraw_ix_only_nonce_acc_fail() {
         assert_eq!(
-            super::process_instruction(
+            process_instruction(
                 &Pubkey::default(),
                 &[KeyedAccount::new(
                     &Pubkey::default(),
@@ -1347,7 +1365,7 @@ mod tests {
     #[test]
     fn test_process_withdraw_ix_bad_recent_blockhash_state_fail() {
         assert_eq!(
-            super::process_instruction(
+            process_instruction(
                 &Pubkey::default(),
                 &[
                     KeyedAccount::new(&Pubkey::default(), true, &create_default_account()),
@@ -1367,10 +1385,14 @@ mod tests {
     #[test]
     fn test_process_withdraw_ix_bad_rent_state_fail() {
         assert_eq!(
-            super::process_instruction(
+            process_instruction(
                 &Pubkey::default(),
                 &[
-                    KeyedAccount::new(&Pubkey::default(), true, &nonce::create_account(1_000_000),),
+                    KeyedAccount::new(
+                        &Pubkey::default(),
+                        true,
+                        &nonce_account::create_account(1_000_000),
+                    ),
                     KeyedAccount::new(&Pubkey::default(), true, &create_default_account()),
                     KeyedAccount::new(
                         &sysvar::recent_blockhashes::id(),
@@ -1388,10 +1410,14 @@ mod tests {
     #[test]
     fn test_process_withdraw_ix_ok() {
         assert_eq!(
-            super::process_instruction(
+            process_instruction(
                 &Pubkey::default(),
                 &[
-                    KeyedAccount::new(&Pubkey::default(), true, &nonce::create_account(1_000_000),),
+                    KeyedAccount::new(
+                        &Pubkey::default(),
+                        true,
+                        &nonce_account::create_account(1_000_000),
+                    ),
                     KeyedAccount::new(&Pubkey::default(), true, &create_default_account()),
                     KeyedAccount::new(
                         &sysvar::recent_blockhashes::id(),
@@ -1409,7 +1435,7 @@ mod tests {
     #[test]
     fn test_process_initialize_ix_no_keyed_accs_fail() {
         assert_eq!(
-            super::process_instruction(
+            process_instruction(
                 &Pubkey::default(),
                 &[],
                 &serialize(&SystemInstruction::InitializeNonceAccount(Pubkey::default())).unwrap(),
@@ -1421,12 +1447,12 @@ mod tests {
     #[test]
     fn test_process_initialize_ix_only_nonce_acc_fail() {
         assert_eq!(
-            super::process_instruction(
+            process_instruction(
                 &Pubkey::default(),
                 &[KeyedAccount::new(
                     &Pubkey::default(),
                     true,
-                    &nonce::create_account(1_000_000),
+                    &nonce_account::create_account(1_000_000),
                 ),],
                 &serialize(&SystemInstruction::InitializeNonceAccount(Pubkey::default())).unwrap(),
             ),
@@ -1437,10 +1463,14 @@ mod tests {
     #[test]
     fn test_process_initialize_bad_recent_blockhash_state_fail() {
         assert_eq!(
-            super::process_instruction(
+            process_instruction(
                 &Pubkey::default(),
                 &[
-                    KeyedAccount::new(&Pubkey::default(), true, &nonce::create_account(1_000_000),),
+                    KeyedAccount::new(
+                        &Pubkey::default(),
+                        true,
+                        &nonce_account::create_account(1_000_000),
+                    ),
                     KeyedAccount::new(
                         &sysvar::recent_blockhashes::id(),
                         false,
@@ -1456,10 +1486,14 @@ mod tests {
     #[test]
     fn test_process_initialize_ix_bad_rent_state_fail() {
         assert_eq!(
-            super::process_instruction(
+            process_instruction(
                 &Pubkey::default(),
                 &[
-                    KeyedAccount::new(&Pubkey::default(), true, &nonce::create_account(1_000_000),),
+                    KeyedAccount::new(
+                        &Pubkey::default(),
+                        true,
+                        &nonce_account::create_account(1_000_000),
+                    ),
                     KeyedAccount::new(
                         &sysvar::recent_blockhashes::id(),
                         false,
@@ -1476,10 +1510,14 @@ mod tests {
     #[test]
     fn test_process_initialize_ix_ok() {
         assert_eq!(
-            super::process_instruction(
+            process_instruction(
                 &Pubkey::default(),
                 &[
-                    KeyedAccount::new(&Pubkey::default(), true, &nonce::create_account(1_000_000),),
+                    KeyedAccount::new(
+                        &Pubkey::default(),
+                        true,
+                        &nonce_account::create_account(1_000_000),
+                    ),
                     KeyedAccount::new(
                         &sysvar::recent_blockhashes::id(),
                         false,
@@ -1495,8 +1533,8 @@ mod tests {
 
     #[test]
     fn test_process_authorize_ix_ok() {
-        let nonce_acc = nonce::create_account(1_000_000);
-        super::process_instruction(
+        let nonce_acc = nonce_account::create_account(1_000_000);
+        process_instruction(
             &Pubkey::default(),
             &[
                 KeyedAccount::new(&Pubkey::default(), true, &nonce_acc),
@@ -1511,7 +1549,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(
-            super::process_instruction(
+            process_instruction(
                 &Pubkey::default(),
                 &[KeyedAccount::new(&Pubkey::default(), true, &nonce_acc,),],
                 &serialize(&SystemInstruction::AuthorizeNonceAccount(Pubkey::default(),)).unwrap(),
@@ -1560,7 +1598,7 @@ mod tests {
     #[test]
     fn test_get_system_account_kind_uninitialized_nonce_account_fail() {
         assert_eq!(
-            get_system_account_kind(&nonce::create_account(42).borrow()),
+            get_system_account_kind(&nonce_account::create_account(42).borrow()),
             None
         );
     }

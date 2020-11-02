@@ -70,6 +70,8 @@ module.exports = {
       "apps/jsonrpc-api",
       "apps/javascript-api",
       "apps/builtins",
+      "apps/sysvars",
+      "apps/backwards-compatibility",
     ],
     "Integrating": ["integrations/exchange"],
     "Validating": [
@@ -172,6 +174,7 @@ module.exports = {
         ],
       },
       "implemented-proposals/abi-management",
+      "implemented-proposals/bank-timestamp-correction",
       "implemented-proposals/commitment",
       "implemented-proposals/cross-program-invocation",
       "implemented-proposals/durable-tx-nonces",

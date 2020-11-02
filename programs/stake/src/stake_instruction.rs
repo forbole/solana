@@ -10,6 +10,7 @@ use solana_sdk::{
     decode_error::DecodeError,
     instruction::{AccountMeta, Instruction, InstructionError},
     keyed_account::{from_keyed_account, get_signers, next_keyed_account, KeyedAccount},
+    process_instruction::InvokeContext,
     program_utils::limited_deserialize,
     pubkey::Pubkey,
     system_instruction,
@@ -446,6 +447,7 @@ pub fn process_instruction(
     _program_id: &Pubkey,
     keyed_accounts: &[KeyedAccount],
     data: &[u8],
+    _invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
     trace!("process_instruction: {:?}", data);
     trace!("keyed_accounts: {:?}", keyed_accounts);
@@ -524,9 +526,10 @@ mod tests {
     use super::*;
     use bincode::serialize;
     use solana_sdk::{
-        account::Account,
+        account::{self, Account},
+        process_instruction::MockInvokeContext,
         rent::Rent,
-        sysvar::{stake_history::StakeHistory, Sysvar},
+        sysvar::stake_history::StakeHistory,
     };
     use std::cell::RefCell;
 
@@ -540,15 +543,15 @@ mod tests {
             .iter()
             .map(|meta| {
                 RefCell::new(if sysvar::clock::check_id(&meta.pubkey) {
-                    sysvar::clock::Clock::default().create_account(1)
+                    account::create_account(&sysvar::clock::Clock::default(), 1)
                 } else if sysvar::rewards::check_id(&meta.pubkey) {
-                    sysvar::rewards::create_account(1, 0.0)
+                    account::create_account(&sysvar::rewards::Rewards::new(0.0), 1)
                 } else if sysvar::stake_history::check_id(&meta.pubkey) {
-                    sysvar::stake_history::create_account(1, &StakeHistory::default())
+                    account::create_account(&StakeHistory::default(), 1)
                 } else if config::check_id(&meta.pubkey) {
                     config::create_account(0, &config::Config::default())
                 } else if sysvar::rent::check_id(&meta.pubkey) {
-                    sysvar::rent::create_account(1, &Rent::default())
+                    account::create_account(&Rent::default(), 1)
                 } else {
                     Account::default()
                 })
@@ -562,7 +565,12 @@ mod tests {
                 .zip(accounts.iter())
                 .map(|(meta, account)| KeyedAccount::new(&meta.pubkey, meta.is_signer, account))
                 .collect();
-            super::process_instruction(&Pubkey::default(), &keyed_accounts, &instruction.data)
+            super::process_instruction(
+                &Pubkey::default(),
+                &keyed_accounts,
+                &instruction.data,
+                &mut MockInvokeContext::default(),
+            )
         }
     }
 
@@ -661,6 +669,7 @@ mod tests {
                     Lockup::default()
                 ))
                 .unwrap(),
+                &mut MockInvokeContext::default()
             ),
             Err(InstructionError::NotEnoughAccountKeys),
         );
@@ -679,6 +688,7 @@ mod tests {
                     Lockup::default()
                 ))
                 .unwrap(),
+                &mut MockInvokeContext::default()
             ),
             Err(InstructionError::NotEnoughAccountKeys),
         );
@@ -696,6 +706,7 @@ mod tests {
                     Lockup::default()
                 ))
                 .unwrap(),
+                &mut MockInvokeContext::default()
             ),
             Err(InstructionError::InvalidArgument),
         );
@@ -709,7 +720,7 @@ mod tests {
                     KeyedAccount::new(
                         &sysvar::rent::id(),
                         false,
-                        &RefCell::new(sysvar::rent::create_account(0, &Rent::default()))
+                        &RefCell::new(account::create_account(&Rent::default(), 0))
                     )
                 ],
                 &serialize(&StakeInstruction::Initialize(
@@ -717,6 +728,7 @@ mod tests {
                     Lockup::default()
                 ))
                 .unwrap(),
+                &mut MockInvokeContext::default()
             ),
             Err(InstructionError::InvalidAccountData),
         );
@@ -731,6 +743,7 @@ mod tests {
                     &create_default_account()
                 ),],
                 &serialize(&StakeInstruction::DelegateStake).unwrap(),
+                &mut MockInvokeContext::default()
             ),
             Err(InstructionError::NotEnoughAccountKeys),
         );
@@ -745,6 +758,7 @@ mod tests {
                     &create_default_account()
                 )],
                 &serialize(&StakeInstruction::DelegateStake).unwrap(),
+                &mut MockInvokeContext::default()
             ),
             Err(InstructionError::NotEnoughAccountKeys),
         );
@@ -759,14 +773,15 @@ mod tests {
                     KeyedAccount::new(
                         &sysvar::clock::id(),
                         false,
-                        &RefCell::new(sysvar::clock::Clock::default().create_account(1))
+                        &RefCell::new(account::create_account(&sysvar::clock::Clock::default(), 1))
                     ),
                     KeyedAccount::new(
                         &sysvar::stake_history::id(),
                         false,
-                        &RefCell::new(
-                            sysvar::stake_history::StakeHistory::default().create_account(1)
-                        )
+                        &RefCell::new(account::create_account(
+                            &sysvar::stake_history::StakeHistory::default(),
+                            1
+                        ))
                     ),
                     KeyedAccount::new(
                         &config::id(),
@@ -775,6 +790,7 @@ mod tests {
                     ),
                 ],
                 &serialize(&StakeInstruction::DelegateStake).unwrap(),
+                &mut MockInvokeContext::default()
             ),
             Err(InstructionError::InvalidAccountData),
         );
@@ -789,18 +805,19 @@ mod tests {
                     KeyedAccount::new(
                         &sysvar::rewards::id(),
                         false,
-                        &RefCell::new(sysvar::rewards::create_account(1, 0.0))
+                        &RefCell::new(account::create_account(
+                            &sysvar::rewards::Rewards::new(0.0),
+                            1
+                        ))
                     ),
                     KeyedAccount::new(
                         &sysvar::stake_history::id(),
                         false,
-                        &RefCell::new(sysvar::stake_history::create_account(
-                            1,
-                            &StakeHistory::default()
-                        ))
+                        &RefCell::new(account::create_account(&StakeHistory::default(), 1,))
                     ),
                 ],
                 &serialize(&StakeInstruction::Withdraw(42)).unwrap(),
+                &mut MockInvokeContext::default()
             ),
             Err(InstructionError::InvalidArgument),
         );
@@ -815,6 +832,7 @@ mod tests {
                     &create_default_account()
                 )],
                 &serialize(&StakeInstruction::Withdraw(42)).unwrap(),
+                &mut MockInvokeContext::default()
             ),
             Err(InstructionError::NotEnoughAccountKeys),
         );
@@ -828,10 +846,14 @@ mod tests {
                     KeyedAccount::new(
                         &sysvar::rewards::id(),
                         false,
-                        &RefCell::new(sysvar::rewards::create_account(1, 0.0))
+                        &RefCell::new(account::create_account(
+                            &sysvar::rewards::Rewards::new(0.0),
+                            1
+                        ))
                     ),
                 ],
                 &serialize(&StakeInstruction::Deactivate).unwrap(),
+                &mut MockInvokeContext::default()
             ),
             Err(InstructionError::InvalidArgument),
         );
@@ -842,6 +864,7 @@ mod tests {
                 &Pubkey::default(),
                 &[],
                 &serialize(&StakeInstruction::Deactivate).unwrap(),
+                &mut MockInvokeContext::default()
             ),
             Err(InstructionError::NotEnoughAccountKeys),
         );
