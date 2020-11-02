@@ -18,7 +18,7 @@ use solana_sdk::{
     signature::{Keypair, Signature, Signer},
     transaction::Transaction,
 };
-use solana_stake_program::{stake_state::StakeState};
+use solana_stake_program::stake_state::StakeState;
 
 use std::{
     collections::{HashMap, HashSet},
@@ -65,6 +65,9 @@ pub struct Config {
     max_poor_block_productor_percentage: usize,
 
     address_labels: HashMap<String, String>,
+
+    // new validator list output path
+    validator_list_ouput_path: PathBuf,
 }
 
 fn get_config() -> Config {
@@ -176,7 +179,7 @@ fn get_config() -> Config {
     let baseline_stake_amount =
         sol_to_lamports(value_t_or_exit!(matches, "baseline_stake_amount", f64));
     let bonus_stake_amount = sol_to_lamports(value_t_or_exit!(matches, "bonus_stake_amount", f64));
-
+    let mut validator_list_ouput_path = PathBuf::from("validators/list.yaml");
     let (json_rpc_url, validator_list) = match cluster.as_str() {
         "mainnet-beta" => (
             "http://api.mainnet-beta.solana.com".into(),
@@ -193,6 +196,7 @@ fn get_config() -> Config {
                         error!("Unable to open validator_list: {}", err);
                         process::exit(1);
                     });
+            validator_list_ouput_path = value_t_or_exit!(matches, "validator_list_file", PathBuf);
 
             let validator_list = serde_yaml::from_reader::<_, Vec<String>>(validator_list_file)
                 .unwrap_or_else(|err| {
@@ -230,6 +234,7 @@ fn get_config() -> Config {
         quality_block_producer_percentage,
         max_poor_block_productor_percentage: 100,
         address_labels: config.address_labels,
+        validator_list_ouput_path,
     };
 
     info!("RPC URL: {}", config.json_rpc_url);
@@ -591,15 +596,19 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         .collect::<Vec<_>>();
 
     // create stake transactions
-    let (create_stake_transactions, delegate_stake_transactions, source_stake_lamports_required) =
-        stake_transaction::create_stake_transactions(
-            &vote_account_info,
-            &config,
-            &rpc_client,
-            quality_block_producers,
-            too_many_poor_block_producers,
-            &epoch_info,
-        );
+    let (
+        create_stake_transactions,
+        delegate_stake_transactions,
+        validator_list,
+        source_stake_lamports_required,
+    ) = stake_transaction::create_stake_transactions(
+        &vote_account_info,
+        &config,
+        &rpc_client,
+        quality_block_producers,
+        too_many_poor_block_producers,
+        &epoch_info,
+    );
 
     // confirm create stake transactions
     if create_stake_transactions.is_empty() {
@@ -665,6 +674,10 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     ) {
         process::exit(1);
     }
-
+    if !config.dry_run {
+        // update new validator_list
+        let buffer = File::create(config.validator_list_ouput_path).unwrap();
+        serde_yaml::to_writer(buffer, &validator_list).unwrap();
+    }
     Ok(())
 }
