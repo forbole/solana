@@ -86,15 +86,7 @@ fn get_accounts_action(
         < epoch_info
             .absolute_slot
             .saturating_sub(config.delinquent_grace_slot_distance)
-    {
-        datapoint_info!(
-            "validator-status",
-            ("cluster", config.cluster, String),
-            ("id", node_pubkey.to_string(), String),
-            ("slot", epoch_info.absolute_slot, i64),
-            ("ok", false, bool)
-        );
-        
+    {   
         if baseline_status.is_exist && baseline_status.is_undelegated {
             info!(
                 "Need to withdraw baseline stake account from validator {}",
@@ -125,15 +117,6 @@ fn get_accounts_action(
             bonus_action = AccountAction::Deactivate;
         }
     } else {
-        // The validator is still considered current for the purposes of metrics reporting,
-        datapoint_info!(
-            "validator-status",
-            ("cluster", config.cluster, String),
-            ("id", node_pubkey.to_string(), String),
-            ("slot", epoch_info.absolute_slot, i64),
-            ("ok", true, bool)
-        );
-
         // the action of baseline
         if !baseline_status.is_exist {
             info!(
@@ -243,7 +226,7 @@ pub fn create_stake_transactions(
             String::from("bonus"),
         );
 
-        // Determine the action of baseline and accounts
+        // Determine the action of baseline and bonus accounts
         let (baseline_action, bonus_action, validator_is_delinquent) = get_accounts_action(
             &root_slot,
             &epoch_info,
@@ -253,6 +236,14 @@ pub fn create_stake_transactions(
             &mut source_stake_lamports_required,
             baseline_status,
             bonus_status,
+        );
+
+        datapoint_info!(
+            "validator-status",
+            ("cluster", config.cluster, String),
+            ("id", node_pubkey.to_string(), String),
+            ("slot", epoch_info.absolute_slot, i64),
+            ("ok", !validator_is_delinquent, bool)
         );
 
         // Create transaction to create account by actions
