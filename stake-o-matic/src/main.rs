@@ -6,7 +6,8 @@ use solana_clap_utils::{
 };
 use solana_client::{
     client_error, rpc_client::RpcClient, rpc_config::RpcSimulateTransactionConfig,
-    rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
+    rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS, rpc_response::RpcVoteAccountInfo,
+    rpc_response::RpcVoteAccountStatus,
 };
 use solana_notifier::Notifier;
 use solana_sdk::{
@@ -68,6 +69,15 @@ pub struct Config {
 
     // new validator list output path
     validator_list_ouput_path: PathBuf,
+
+    // validator list length at least this size
+    validator_min_length: usize,
+
+    // the cap of commision for filtering new validators
+    commission_cap: u8,
+
+    // the cap of activated stake percentage for filtering new validators
+    stake_percentage_cap: f64,
 }
 
 fn get_config() -> Config {
@@ -159,7 +169,28 @@ fn get_config() -> Config {
                 .long("bonus-stake-amount")
                 .value_name("SOL")
                 .takes_value(true)
-                .default_value("50000")
+                .default_value("15")
+                .validator(is_amount)
+        ).arg(
+            Arg::with_name("validator_min_length")
+                .long("validator-min-length")
+                .value_name("LENGTH")
+                .takes_value(true)
+                .default_value("20")
+                .validator(is_amount)
+        ).arg(
+            Arg::with_name("commission_cap")
+                .long("commission-cap")
+                .value_name("COMMISSION")
+                .takes_value(true)
+                .default_value("10")
+                .validator(is_amount)
+        ).arg(
+            Arg::with_name("stake_percentage_cap")
+                .long("stake-percentage-cap")
+                .value_name("STAKECAP")
+                .takes_value(true)
+                .default_value("10")
                 .validator(is_amount)
         )
         .get_matches();
@@ -220,7 +251,9 @@ fn get_config() -> Config {
         _ => unreachable!(),
     };
     let validator_list = validator_list.into_iter().collect::<HashSet<_>>();
-
+    let validator_min_length = value_t_or_exit!(matches, "validator_min_length", usize);
+    let commission_cap = value_t_or_exit!(matches, "commission_cap", u8);
+    let stake_percentage_cap = value_t_or_exit!(matches, "stake_percentage_cap", f64);
     let config = Config {
         json_rpc_url,
         cluster,
@@ -235,6 +268,9 @@ fn get_config() -> Config {
         max_poor_block_productor_percentage: 100,
         address_labels: config.address_labels,
         validator_list_ouput_path,
+        validator_min_length,
+        commission_cap,
+        stake_percentage_cap,
     };
 
     info!("RPC URL: {}", config.json_rpc_url);
@@ -560,6 +596,63 @@ fn process_confirmations(
     ok
 }
 
+fn filter_validator_status(
+    config: &Config,
+    vote: RpcVoteAccountInfo,
+    quality_block_producers: &HashSet<Pubkey>,
+    total_activated_stake: u64
+) -> Option<RpcVoteAccountInfo> {
+    let node_pubkey = Pubkey::from_str(&vote.node_pubkey).ok()?;
+    let is_qulity_producers = quality_block_producers.contains(&node_pubkey);
+    let activated_stake_percentage: f64 = 100.0 * vote.activated_stake as f64 / total_activated_stake as f64;
+    let is_over_percentage = activated_stake_percentage > config.stake_percentage_cap;
+
+    let is_fit_all_conditions = is_qulity_producers && !is_over_percentage;
+    if is_fit_all_conditions {
+        Some(vote)
+    } else {
+        None
+    }
+}
+
+fn generate_validator_list(
+    config: &Config,
+    vote_account_status: &RpcVoteAccountStatus,
+    quality_block_producers: &HashSet<Pubkey>,
+) -> HashSet<Pubkey> {
+    let mut validator_list = config.validator_list.clone();
+    if validator_list.len() >= config.validator_min_length{
+        return validator_list;
+    }
+    // caculate total activated_stake in validators
+     let total_activated_stake = vote_account_status
+        .clone()
+        .current
+        .into_iter()
+        .chain(vote_account_status.delinquent.clone().into_iter())
+        .fold(0, |acc, vote| acc + vote.activated_stake);
+
+    // filter quality producers
+    let mut quality_producers_info = vote_account_status
+        .clone()
+        .current
+        .into_iter()
+        .filter_map(|vote| {
+            filter_validator_status(config, vote, quality_block_producers, total_activated_stake)
+        })
+        .collect::<Vec<_>>();
+
+    while validator_list.len() < config.validator_min_length { 
+        if quality_producers_info.len() == 0 {
+            break;
+        }
+        let vali = quality_producers_info.pop().unwrap();
+        let node_pubkey = Pubkey::from_str(&vali.node_pubkey).ok().unwrap();
+        validator_list.insert(node_pubkey);
+    }
+    return validator_list;
+}
+
 #[allow(clippy::cognitive_complexity)] // Yeah I know...
 fn main() -> Result<(), Box<dyn error::Error>> {
     solana_logger::setup_with_default("solana=info");
@@ -576,18 +669,20 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     let (quality_block_producers, poor_block_producers) =
         classify_block_producers(&rpc_client, &config, last_epoch)?;
-
     let too_many_poor_block_producers = false;
 
     // Fetch vote account status for all the validator_listed validators
     let vote_account_status = rpc_client.get_vote_accounts()?;
+
+    let validator_list = generate_validator_list(&config, &vote_account_status, &quality_block_producers);
+    
     let vote_account_info = vote_account_status
         .current
         .into_iter()
         .chain(vote_account_status.delinquent.into_iter())
         .filter_map(|vai| {
             let node_pubkey = Pubkey::from_str(&vai.node_pubkey).ok()?;
-            if config.validator_list.contains(&node_pubkey) {
+            if validator_list.contains(&node_pubkey) {
                 Some(vai)
             } else {
                 None
