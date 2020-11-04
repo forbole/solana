@@ -17,6 +17,7 @@ struct AccountStatus {
     is_undelegated: bool,
 }
 
+// check account status via rpc
 fn check_account_status(
     rpc_client: &RpcClient,
     epoch_info: &EpochInfo,
@@ -65,6 +66,7 @@ enum AccountAction {
     Withdraw,
 }
 
+// set the account action for delegation process
 fn get_accounts_action(
     root_slot: &u64,
     epoch_info: &EpochInfo,
@@ -167,6 +169,7 @@ fn get_accounts_action(
     return (baseline_action, bonus_action, validator_is_delinquent);
 }
 
+// create transactions list to create and delegate accounts
 pub fn create_stake_transactions(
     vote_account_info: &Vec<RpcVoteAccountInfo>,
     config: &Config,
