@@ -190,7 +190,7 @@ fn get_config() -> Config {
                 .long("stake-percentage-cap")
                 .value_name("STAKECAP")
                 .takes_value(true)
-                .default_value("10")
+                .default_value("5")
                 .validator(is_amount)
         )
         .get_matches();
@@ -596,6 +596,7 @@ fn process_confirmations(
     ok
 }
 
+// for filter validator by stake percentage, quality
 fn filter_validator_status(
     config: &Config,
     vote: RpcVoteAccountInfo,
@@ -603,11 +604,11 @@ fn filter_validator_status(
     total_activated_stake: u64
 ) -> Option<RpcVoteAccountInfo> {
     let node_pubkey = Pubkey::from_str(&vote.node_pubkey).ok()?;
-    let is_qulity_producers = quality_block_producers.contains(&node_pubkey);
+    let is_quality_producers = quality_block_producers.contains(&node_pubkey);
     let activated_stake_percentage: f64 = 100.0 * vote.activated_stake as f64 / total_activated_stake as f64;
-    let is_over_percentage = activated_stake_percentage > config.stake_percentage_cap;
-
-    let is_fit_all_conditions = is_qulity_producers && !is_over_percentage;
+    let is_percentage_in_range = activated_stake_percentage <= config.stake_percentage_cap;
+    let is_over_min_stake_required = vote.activated_stake > 500;
+    let is_fit_all_conditions = is_quality_producers && is_percentage_in_range && is_over_min_stake_required;
     if is_fit_all_conditions {
         Some(vote)
     } else {
@@ -615,6 +616,7 @@ fn filter_validator_status(
     }
 }
 
+// generate validator hashset for create transactions step
 fn generate_validator_list(
     config: &Config,
     vote_account_status: &RpcVoteAccountStatus,
@@ -632,7 +634,7 @@ fn generate_validator_list(
         .chain(vote_account_status.delinquent.clone().into_iter())
         .fold(0, |acc, vote| acc + vote.activated_stake);
 
-    // filter quality producers
+    // filter producers by quality, stake percentage
     let mut quality_producers_info = vote_account_status
         .clone()
         .current
@@ -646,8 +648,8 @@ fn generate_validator_list(
         if quality_producers_info.len() == 0 {
             break;
         }
-        let vali = quality_producers_info.pop().unwrap();
-        let node_pubkey = Pubkey::from_str(&vali.node_pubkey).ok().unwrap();
+        let validator = quality_producers_info.pop().unwrap();
+        let node_pubkey = Pubkey::from_str(&validator.node_pubkey).ok().unwrap();
         validator_list.insert(node_pubkey);
     }
     return validator_list;
