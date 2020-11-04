@@ -17,7 +17,7 @@ struct AccountStatus {
     is_undelegated: bool,
 }
 
-// check account status via rpc
+// check account delegation status via rpc
 fn check_account_status(
     rpc_client: &RpcClient,
     epoch_info: &EpochInfo,
@@ -48,10 +48,11 @@ fn check_account_status(
             // epoch the stake was deactivated, std::Epoch::MAX if not deactivated
             status.is_deactivating = delegation.deactivation_epoch != u64::MAX;
 
-             // check if deactivating process done or not
+            // check if deactivating process done or not
             if status.is_deactivating {
                 let cool_down_period = 0;
-                status.is_undelegated = delegation.deactivation_epoch <= epoch_info.epoch - cool_down_period;
+                status.is_undelegated =
+                    delegation.deactivation_epoch <= epoch_info.epoch - cool_down_period;
             }
         }
     }
@@ -66,7 +67,7 @@ enum AccountAction {
     Withdraw,
 }
 
-// set the account action for delegation process
+// set the account action for delegation process, and check if the validator is delinquent or not
 fn get_accounts_action(
     root_slot: &u64,
     epoch_info: &EpochInfo,
@@ -88,7 +89,7 @@ fn get_accounts_action(
         < epoch_info
             .absolute_slot
             .saturating_sub(config.delinquent_grace_slot_distance)
-    {   
+    {
         if baseline_status.is_exist && baseline_status.is_undelegated {
             info!(
                 "Need to withdraw baseline stake account from validator {}",
@@ -102,7 +103,7 @@ fn get_accounts_action(
                 formatted_node_pubkey
             );
             baseline_action = AccountAction::Deactivate;
-        } else if !baseline_status.is_exist{
+        } else if !baseline_status.is_exist {
             validator_is_delinquent = true;
         }
         if bonus_status.is_exist && bonus_status.is_undelegated {
@@ -177,7 +178,12 @@ pub fn create_stake_transactions(
     quality_block_producers: HashSet<Pubkey>,
     too_many_poor_block_producers: bool,
     epoch_info: &EpochInfo,
-) -> (Vec<(Transaction, String)>, Vec<(Transaction, String)>, Vec<String>, u64) {
+) -> (
+    Vec<(Transaction, String)>,
+    Vec<(Transaction, String)>,
+    Vec<String>,
+    u64,
+) {
     let last_epoch = epoch_info.epoch - 1;
     let mut validator_list: Vec<String> = vec![];
     let mut source_stake_lamports_required = 0;
@@ -230,7 +236,7 @@ pub fn create_stake_transactions(
         );
 
         // Determine the action of baseline and bonus accounts
-        let (baseline_action, bonus_action, validator_is_delinquent) = get_accounts_action(
+        let (mut baseline_action, mut bonus_action, validator_is_delinquent) = get_accounts_action(
             &root_slot,
             &epoch_info,
             &config,
@@ -268,6 +274,7 @@ pub fn create_stake_transactions(
                     formatted_node_pubkey, baseline_stake_address
                 ),
             ));
+            baseline_action = AccountAction::Delegate;
         }
         if let AccountAction::Create = bonus_action {
             create_stake_transactions.push((
@@ -287,6 +294,7 @@ pub fn create_stake_transactions(
                     formatted_node_pubkey, bonus_stake_address
                 ),
             ));
+            bonus_action = AccountAction::Delegate;
         }
 
         // Delegation transactions by actions
@@ -406,4 +414,12 @@ pub fn create_stake_transactions(
         validator_list,
         source_stake_lamports_required,
     );
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn it_works() {
+        assert_eq!(2 + 2, 4);
+    }
 }
