@@ -111,13 +111,13 @@ The identity of the `--trusted-validator`s are:
 ## Mainnet Beta
 
 A permissionless, persistent cluster for early token holders and launch partners.
-Currently smart contracts, rewards, and inflation are disabled.
+Currently, rewards and inflation are disabled.
 
 - Tokens that are issued on Mainnet Beta are **real** SOL
 - If you have paid money to purchase/be issued tokens, such as through our
   CoinList auction, these tokens will be transferred on Mainnet Beta.
   - Note: If you are using a non-command-line wallet such as
-    [Trust Wallet](wallet-guide/trust-wallet.md),
+    [Solflare](wallet-guide/solflare.md),
     the wallet will always be connecting to Mainnet Beta.
 - Gossip entrypoint for Mainnet Beta: `mainnet-beta.solana.com:8001`
 - Metrics environment variable for Mainnet Beta:
