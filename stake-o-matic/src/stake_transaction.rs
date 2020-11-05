@@ -8,7 +8,7 @@ use solana_sdk::{
 };
 use solana_stake_program::stake_instruction;
 
-use crate::get_stake_account;
+use crate::utils::get_stake_account;
 use crate::Config;
 use std::{collections::HashSet, str::FromStr};
 struct AccountStatus {
@@ -164,7 +164,7 @@ fn get_accounts_action(
 }
 
 // create transactions list to create and delegate accounts
-pub fn create_stake_transactions(
+pub fn generate_stake_transactions(
     vote_account_info: &Vec<RpcVoteAccountInfo>,
     config: &Config,
     rpc_client: &RpcClient,
