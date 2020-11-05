@@ -44,9 +44,6 @@ pub struct Config {
     /// Amount of lamports to stake any validator in the validator_list that is not delinquent
     baseline_stake_amount: u64,
 
-    /// Amount of additional lamports to stake quality block producers in the validator_list
-    bonus_stake_amount: u64,
-
     /// Quality validators produce a block at least this percentage of their leader slots over the
     /// previous epoch
     quality_block_producer_percentage: usize,
