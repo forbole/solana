@@ -59,6 +59,7 @@ pub fn get_config() -> Config {
                 .required(true)
                 .takes_value(true)
                 .conflicts_with("cluster")
+                .default_value("validator.list")
                 .help("File containing an YAML array of validator pubkeys eligible for staking")
         )
         .arg(
@@ -147,7 +148,7 @@ pub fn get_config() -> Config {
     let baseline_stake_amount =
         sol_to_lamports(value_t_or_exit!(matches, "baseline_stake_amount", f64));
     let bonus_stake_amount = sol_to_lamports(value_t_or_exit!(matches, "bonus_stake_amount", f64));
-    let mut validator_list_ouput_path = PathBuf::from("validators/list.yaml");
+    let validator_list_ouput_path = value_t_or_exit!(matches, "validator_list_file", PathBuf);
     let (json_rpc_url, validator_list) = match cluster.as_str() {
         "mainnet-beta" => (
             "http://api.mainnet-beta.solana.com".into(),
@@ -161,15 +162,14 @@ pub fn get_config() -> Config {
             let validator_list_file =
                 File::open(value_t_or_exit!(matches, "validator_list_file", PathBuf))
                     .unwrap_or_else(|err| {
-                        error!("Unable to open validator_list: {}", err);
-                        process::exit(1);
+                        info!("Unable to open validator_list: {}, create empty file", err);
+                        return File::create(&validator_list_ouput_path).unwrap();
                     });
-            validator_list_ouput_path = value_t_or_exit!(matches, "validator_list_file", PathBuf);
 
             let validator_list = serde_yaml::from_reader::<_, Vec<String>>(validator_list_file)
                 .unwrap_or_else(|err| {
-                    error!("Unable to read validator_list: {}", err);
-                    process::exit(1);
+                    info!("Unable to read validator_list: {}, create empty vector.", err);
+                    return vec![];
                 })
                 .into_iter()
                 .map(|p| {
