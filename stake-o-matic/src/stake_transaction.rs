@@ -20,8 +20,8 @@ struct AccountStatus {
 // check account delegation status via rpc
 fn check_account_status(
     rpc_client: &RpcClient,
-    epoch_info: &EpochInfo,
     stake_address: &Pubkey,
+    vote_pubkey: &Pubkey,
     config: &Config,
     account_type: String,
 ) -> AccountStatus {
@@ -44,16 +44,9 @@ fn check_account_status(
             );
         }
         if let Some(delegation) = stake_state.delegation() {
-            status.is_undelegated = false;
+            status.is_undelegated = delegation.voter_pubkey != *vote_pubkey;
             // epoch the stake was deactivated, std::Epoch::MAX if not deactivated
             status.is_deactivating = delegation.deactivation_epoch != u64::MAX;
-
-            // check if deactivating process done or not
-            if status.is_deactivating {
-                let cool_down_period = 0;
-                status.is_undelegated =
-                    delegation.deactivation_epoch <= epoch_info.epoch - cool_down_period;
-            }
         }
     }
     return status;
@@ -220,8 +213,8 @@ pub fn create_stake_transactions(
         // Check baseline status
         let baseline_status = check_account_status(
             &rpc_client,
-            &epoch_info,
             &baseline_stake_address,
+            &vote_pubkey,
             &config,
             String::from("baseline"),
         );
@@ -229,8 +222,8 @@ pub fn create_stake_transactions(
         // Check bonus status
         let bonus_status = check_account_status(
             &rpc_client,
-            &epoch_info,
             &bonus_stake_address,
+            &vote_pubkey,
             &config,
             String::from("bonus"),
         );
@@ -414,12 +407,4 @@ pub fn create_stake_transactions(
         validator_list,
         source_stake_lamports_required,
     );
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
-    }
 }
