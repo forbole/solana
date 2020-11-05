@@ -147,7 +147,6 @@ pub fn get_config() -> Config {
         value_t_or_exit!(matches, "quality_block_producer_percentage", usize);
     let baseline_stake_amount =
         sol_to_lamports(value_t_or_exit!(matches, "baseline_stake_amount", f64));
-    let bonus_stake_amount = sol_to_lamports(value_t_or_exit!(matches, "bonus_stake_amount", f64));
     let validator_list_ouput_path = value_t_or_exit!(matches, "validator_list_file", PathBuf);
     let (json_rpc_url, validator_list) = match cluster.as_str() {
         "mainnet-beta" => (
@@ -199,7 +198,6 @@ pub fn get_config() -> Config {
         validator_list,
         dry_run,
         baseline_stake_amount,
-        bonus_stake_amount,
         delinquent_grace_slot_distance: 21600, // ~24 hours worth of slots at 2.5 slots per second
         quality_block_producer_percentage,
         max_poor_block_productor_percentage: 100,
