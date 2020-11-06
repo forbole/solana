@@ -59,7 +59,7 @@ pub fn get_config() -> Config {
                 .required(true)
                 .takes_value(true)
                 .conflicts_with("cluster")
-                .default_value("validator.list")
+                .default_value("validator.yaml")
                 .help("File containing an YAML array of validator pubkeys eligible for staking")
         )
         .arg(
