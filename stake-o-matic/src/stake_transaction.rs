@@ -291,109 +291,117 @@ pub fn generate_stake_transactions(
         }
 
         // Delegation transactions by actions
-        if let AccountAction::None = baseline_action {
-        } else if let AccountAction::Withdraw = baseline_action {
-            delegate_stake_transactions.push((
-                Transaction::new_unsigned(Message::new(
-                    &[stake_instruction::withdraw(
-                        &baseline_stake_address,
-                        &config.authorized_staker.pubkey(),
-                        &config.source_stake_address,
-                        config.baseline_stake_amount,
-                        None,
-                    )],
-                    Some(&config.authorized_staker.pubkey()),
-                )),
-                format!(
-                    "🏖️ `{}` is delinquent. Removed ◎{} baseline stake",
-                    formatted_node_pubkey,
-                    lamports_to_sol(config.baseline_stake_amount),
-                ),
-            ));
-        } else if let AccountAction::Deactivate = baseline_action {
-            delegate_stake_transactions.push((
-                Transaction::new_unsigned(Message::new(
-                    &[stake_instruction::deactivate_stake(
-                        &baseline_stake_address,
-                        &config.authorized_staker.pubkey(),
-                    )],
-                    Some(&config.authorized_staker.pubkey()),
-                )),
-                format!(
-                    "🏖️ `{}` is delinquent. Deactivated ◎{} baseline stake",
-                    formatted_node_pubkey,
-                    lamports_to_sol(config.baseline_stake_amount),
-                ),
-            ));
-        } else {
-            delegate_stake_transactions.push((
-                Transaction::new_unsigned(Message::new(
-                    &[stake_instruction::delegate_stake(
-                        &baseline_stake_address,
-                        &config.authorized_staker.pubkey(),
-                        &vote_pubkey,
-                    )],
-                    Some(&config.authorized_staker.pubkey()),
-                )),
-                format!(
-                    "🥩 `{}` is current. Added ◎{} baseline stake",
-                    formatted_node_pubkey,
-                    lamports_to_sol(config.baseline_stake_amount),
-                ),
-            ));
+        match baseline_action {
+            AccountAction::Delegate => {
+                delegate_stake_transactions.push((
+                    Transaction::new_unsigned(Message::new(
+                        &[stake_instruction::delegate_stake(
+                            &baseline_stake_address,
+                            &config.authorized_staker.pubkey(),
+                            &vote_pubkey,
+                        )],
+                        Some(&config.authorized_staker.pubkey()),
+                    )),
+                    format!(
+                        "🥩 `{}` is current. Added ◎{} baseline stake",
+                        formatted_node_pubkey,
+                        lamports_to_sol(config.baseline_stake_amount),
+                    ),
+                ));
+            }
+            AccountAction::Deactivate => {
+                delegate_stake_transactions.push((
+                    Transaction::new_unsigned(Message::new(
+                        &[stake_instruction::deactivate_stake(
+                            &baseline_stake_address,
+                            &config.authorized_staker.pubkey(),
+                        )],
+                        Some(&config.authorized_staker.pubkey()),
+                    )),
+                    format!(
+                        "🏖️ `{}` is delinquent. Deactivated ◎{} baseline stake",
+                        formatted_node_pubkey,
+                        lamports_to_sol(config.baseline_stake_amount),
+                    ),
+                ));
+            }
+            AccountAction::Withdraw => {
+                delegate_stake_transactions.push((
+                    Transaction::new_unsigned(Message::new(
+                        &[stake_instruction::withdraw(
+                            &baseline_stake_address,
+                            &config.authorized_staker.pubkey(),
+                            &config.source_stake_address,
+                            config.baseline_stake_amount,
+                            None,
+                        )],
+                        Some(&config.authorized_staker.pubkey()),
+                    )),
+                    format!(
+                        "💔 `{}` is delinquent. Removed ◎{} baseline stake",
+                        formatted_node_pubkey,
+                        lamports_to_sol(config.baseline_stake_amount),
+                    ),
+                ));
+            }
+            _ => {}
         }
 
-        if let AccountAction::None = bonus_action {
-        } else if let AccountAction::Withdraw = bonus_action {
-            delegate_stake_transactions.push((
-                Transaction::new_unsigned(Message::new(
-                    &[stake_instruction::withdraw(
-                        &bonus_stake_address,
-                        &config.authorized_staker.pubkey(),
-                        &config.source_stake_address,
-                        config.bonus_stake_amount,
-                        None,
-                    )],
-                    Some(&config.authorized_staker.pubkey()),
-                )),
-                format!(
-                    "🏖️ `{}` is unqualified. Removed ◎{} bonus stake",
-                    formatted_node_pubkey,
-                    lamports_to_sol(config.bonus_stake_amount),
-                ),
-            ));
-        } else if let AccountAction::Deactivate = bonus_action {
-            delegate_stake_transactions.push((
-                Transaction::new_unsigned(Message::new(
-                    &[stake_instruction::deactivate_stake(
-                        &bonus_stake_address,
-                        &config.authorized_staker.pubkey(),
-                    )],
-                    Some(&config.authorized_staker.pubkey()),
-                )),
-                format!(
-                    "🏖️ `{}` is unqualified. Deactivated ◎{} bonus stake",
-                    formatted_node_pubkey,
-                    lamports_to_sol(config.bonus_stake_amount),
-                ),
-            ));
-        } else {
-            delegate_stake_transactions.push((
-                Transaction::new_unsigned(Message::new(
-                    &[stake_instruction::delegate_stake(
-                        &bonus_stake_address,
-                        &config.authorized_staker.pubkey(),
-                        &vote_pubkey,
-                    )],
-                    Some(&config.authorized_staker.pubkey()),
-                )),
-                format!(
-                    "🏅 `{}` was a quality block producer during epoch {}. Added ◎{} bonus stake",
-                    formatted_node_pubkey,
-                    last_epoch,
-                    lamports_to_sol(config.bonus_stake_amount),
-                ),
-            ));
+        match bonus_action {
+            AccountAction::Delegate => {
+                delegate_stake_transactions.push((
+                    Transaction::new_unsigned(Message::new(
+                        &[stake_instruction::delegate_stake(
+                            &bonus_stake_address,
+                            &config.authorized_staker.pubkey(),
+                            &vote_pubkey,
+                        )],
+                        Some(&config.authorized_staker.pubkey()),
+                    )),
+                    format!(
+                        "🏅 `{}` was a quality block producer during epoch {}. Added ◎{} bonus stake",
+                        formatted_node_pubkey,
+                        last_epoch,
+                        lamports_to_sol(config.bonus_stake_amount),
+                    ),
+                ));
+            }
+            AccountAction::Deactivate => {
+                delegate_stake_transactions.push((
+                    Transaction::new_unsigned(Message::new(
+                        &[stake_instruction::deactivate_stake(
+                            &bonus_stake_address,
+                            &config.authorized_staker.pubkey(),
+                        )],
+                        Some(&config.authorized_staker.pubkey()),
+                    )),
+                    format!(
+                        "🏖️ `{}` is unqualified. Deactivated ◎{} bonus stake",
+                        formatted_node_pubkey,
+                        lamports_to_sol(config.bonus_stake_amount),
+                    ),
+                ));
+            }
+            AccountAction::Withdraw => {
+                delegate_stake_transactions.push((
+                    Transaction::new_unsigned(Message::new(
+                        &[stake_instruction::withdraw(
+                            &bonus_stake_address,
+                            &config.authorized_staker.pubkey(),
+                            &config.source_stake_address,
+                            config.bonus_stake_amount,
+                            None,
+                        )],
+                        Some(&config.authorized_staker.pubkey()),
+                    )),
+                    format!(
+                        "💔 `{}` is unqualified. Removed ◎{} bonus stake",
+                        formatted_node_pubkey,
+                        lamports_to_sol(config.bonus_stake_amount),
+                    ),
+                ));
+            }
+            _ => {}
         }
 
         if !validator_is_delinquent {
