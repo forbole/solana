@@ -11,12 +11,13 @@ use std::{
 };
 
 struct Config {
-    bpf_sdk: PathBuf,
     bpf_out_dir: Option<PathBuf>,
+    bpf_sdk: PathBuf,
     dump: bool,
     features: Vec<String>,
     manifest_path: Option<PathBuf>,
     no_default_features: bool,
+    verbose: bool,
 }
 
 impl Default for Config {
@@ -29,10 +30,11 @@ impl Default for Config {
                 .to_path_buf()
                 .join("sdk/bpf"),
             bpf_out_dir: None,
+            dump: false,
             features: vec![],
             manifest_path: None,
             no_default_features: false,
-            dump: true,
+            verbose: false,
         }
     }
 }
@@ -152,34 +154,58 @@ fn build_bpf(config: Config) {
     }
 
     let xargo_build = config.bpf_sdk.join("rust/xargo-build.sh");
-    let mut spawn_args = vec![];
+    let mut xargo_build_args = vec![];
 
     if config.no_default_features {
-        spawn_args.push("--no-default-features");
+        xargo_build_args.push("--no-default-features");
     }
     for feature in &config.features {
-        spawn_args.push("--features");
-        spawn_args.push(feature);
+        xargo_build_args.push("--features");
+        xargo_build_args.push(feature);
     }
     if legacy_program_feature_present {
         if !config.no_default_features {
-            spawn_args.push("--no-default-features");
+            xargo_build_args.push("--no-default-features");
         }
-        spawn_args.push("--features=program");
+        xargo_build_args.push("--features=program");
     }
-    spawn(&config.bpf_sdk.join(xargo_build), &spawn_args);
+    if config.verbose {
+        xargo_build_args.push("--verbose");
+    }
+    spawn(&config.bpf_sdk.join(xargo_build), &xargo_build_args);
 
     if let Some(program_name) = program_name {
         let program_unstripped_so = target_build_directory.join(&format!("{}.so", program_name));
         let program_dump = bpf_out_dir.join(&format!("{}-dump.txt", program_name));
         let program_so = bpf_out_dir.join(&format!("{}.so", program_name));
 
-        spawn(
-            &config.bpf_sdk.join("scripts/strip.sh"),
-            &[&program_unstripped_so, &program_so],
-        );
+        fn file_older_or_missing(prerequisite_file: &Path, target_file: &Path) -> bool {
+            let prerequisite_metadata = fs::metadata(prerequisite_file).unwrap_or_else(|err| {
+                eprintln!(
+                    "Unable to get file metadata for {}: {}",
+                    prerequisite_file.display(),
+                    err
+                );
+                exit(1);
+            });
 
-        if config.dump {
+            if let Ok(target_metadata) = fs::metadata(target_file) {
+                use std::time::UNIX_EPOCH;
+                prerequisite_metadata.modified().unwrap_or(UNIX_EPOCH)
+                    > target_metadata.modified().unwrap_or(UNIX_EPOCH)
+            } else {
+                true
+            }
+        }
+
+        if file_older_or_missing(&program_unstripped_so, &program_so) {
+            spawn(
+                &config.bpf_sdk.join("scripts/strip.sh"),
+                &[&program_unstripped_so, &program_so],
+            );
+        }
+
+        if config.dump && file_older_or_missing(&program_unstripped_so, &program_dump) {
             spawn(
                 &config.bpf_sdk.join("scripts/dump.sh"),
                 &[&program_unstripped_so, &program_dump],
@@ -223,6 +249,13 @@ fn main() {
                 .long("dump")
                 .takes_value(false)
                 .help("Dump ELF information to a text file on success"),
+        )
+        .arg(
+            Arg::with_name("verbose")
+                .short("v")
+                .long("verbose")
+                .takes_value(false)
+                .help("Use verbose output"),
         )
         .arg(
             Arg::with_name("features")
@@ -281,6 +314,7 @@ fn main() {
             .unwrap_or_else(Vec::new),
         manifest_path: value_t!(matches, "manifest_path", PathBuf).ok(),
         no_default_features: matches.is_present("no_default_features"),
+        verbose: matches.is_present("verbose"),
     };
     build_bpf(config);
 }
