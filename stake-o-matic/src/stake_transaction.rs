@@ -44,9 +44,10 @@ fn check_account_status(
             );
         }
         if let Some(delegation) = stake_state.delegation() {
-            // epoch the stake was deactivated, std::Epoch::MAX if not deactivated
-            status.is_deactivating = delegation.deactivation_epoch != u64::MAX;
-            if status.is_deactivating {
+            status.is_undelegated = false;
+            // epoch the stake was deactivating
+            status.is_deactivating = delegation.deactivation_epoch == epoch_info.epoch;
+            if !status.is_deactivating {
                 let cool_down = 0;
                 status.is_undelegated = delegation.deactivation_epoch + cool_down < epoch_info.epoch;
             }
