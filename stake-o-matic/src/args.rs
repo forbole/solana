@@ -59,7 +59,7 @@ pub fn get_config() -> Config {
                 .required(true)
                 .takes_value(true)
                 .conflicts_with("cluster")
-                .default_value("validator.list")
+                .default_value("validator.yaml")
                 .help("File containing an YAML array of validator pubkeys eligible for staking")
         )
         .arg(
@@ -112,10 +112,11 @@ pub fn get_config() -> Config {
         ).arg(
             Arg::with_name("validator_min_length")
                 .long("validator-min-length")
-                .value_name("LENGTH")
+                .value_name("MINLENGTH")
                 .takes_value(true)
                 .default_value("20")
                 .validator(is_amount)
+                .help("The minimum length of validator list")
         ).arg(
             Arg::with_name("commission_cap")
                 .long("commission-cap")
@@ -123,6 +124,7 @@ pub fn get_config() -> Config {
                 .takes_value(true)
                 .default_value("10")
                 .validator(is_amount)
+                .help("The cap of commission rate for validator filter")
         ).arg(
             Arg::with_name("stake_percentage_cap")
                 .long("stake-percentage-cap")
@@ -130,6 +132,7 @@ pub fn get_config() -> Config {
                 .takes_value(true)
                 .default_value("5")
                 .validator(is_amount)
+                .help("The cap of activated stake percentage for validator filter")
         )
         .get_matches();
 

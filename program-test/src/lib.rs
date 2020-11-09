@@ -322,9 +322,9 @@ impl program_stubs::SyscallStubs for SyscallStubs {
     }
 }
 
-fn find_file(filename: &str) -> Option<PathBuf> {
-    for path in &["", "tests/fixtures"] {
-        let candidate = Path::new(path).join(&filename);
+fn find_file(filename: &str, search_path: &[PathBuf]) -> Option<PathBuf> {
+    for path in search_path {
+        let candidate = path.join(&filename);
         if candidate.exists() {
             return Some(candidate);
         }
@@ -348,22 +348,21 @@ pub struct ProgramTest {
     builtins: Vec<Builtin>,
     bpf_compute_max_units: Option<u64>,
     prefer_bpf: bool,
+    search_path: Vec<PathBuf>,
 }
 
 impl Default for ProgramTest {
     /// Initialize a new ProgramTest
     ///
-    /// The `bpf` environment variable controls how BPF programs are selected during operation:
-    ///     `export bpf=1`   -- use BPF programs if present, otherwise fall back to the
-    ///                         native instruction processors provided with the test
-    ///     `export bpf=0`   -- use native instruction processor if present, otherwise fall back to
-    ///                         the BPF program
-    ///                         (default)
-    /// and the `ProgramTest::prefer_bpf()` method may be used to override the selection at runtime
+    /// If the `BPF_OUT_DIR` environment variable is defined, BPF programs will be preferred over
+    /// over a native instruction processor.  The `ProgramTest::prefer_bpf()` method may be
+    /// used to override this preference at runtime.  `cargo test-bpf` will set `BPF_OUT_DIR`
+    /// automatically.
     ///
     /// BPF program shared objects and account data files are searched for in
-    /// * the current working directory (the default output location for `cargo build-bpf),
+    /// * the value of the `BPF_OUT_DIR` environment variable
     /// * the `tests/fixtures` sub-directory
+    /// * the current working directory
     ///
     fn default() -> Self {
         solana_logger::setup_with_default(
@@ -373,16 +372,25 @@ impl Default for ProgramTest {
              solana_runtime::system_instruction_processor=trace,\
              solana_program_test=info",
         );
-        let prefer_bpf = match std::env::var("bpf") {
-            Ok(val) => !matches!(val.as_str(), "0" | ""),
-            Err(_err) => false,
-        };
+        let mut prefer_bpf = false;
+
+        let mut search_path = vec![];
+        if let Ok(bpf_out_dir) = std::env::var("BPF_OUT_DIR") {
+            prefer_bpf = true;
+            search_path.push(PathBuf::from(bpf_out_dir));
+        }
+        search_path.push(PathBuf::from("tests/fixtures"));
+        if let Ok(dir) = std::env::current_dir() {
+            search_path.push(dir);
+        }
+        debug!("search path: {:?}", search_path);
 
         Self {
             accounts: vec![],
             builtins: vec![],
             bpf_compute_max_units: None,
             prefer_bpf,
+            search_path,
         }
     }
 }
@@ -433,7 +441,7 @@ impl ProgramTest {
             address,
             Account {
                 lamports,
-                data: read_file(find_file(filename).unwrap_or_else(|| {
+                data: read_file(find_file(filename, &self.search_path).unwrap_or_else(|| {
                     panic!("Unable to locate {}", filename);
                 })),
                 owner,
@@ -479,7 +487,7 @@ impl ProgramTest {
         process_instruction: Option<ProcessInstructionWithContext>,
     ) {
         let loader = solana_program::bpf_loader::id();
-        let program_file = find_file(&format!("{}.so", program_name));
+        let program_file = find_file(&format!("{}.so", program_name), &self.search_path);
 
         if process_instruction.is_none() && program_file.is_none() {
             panic!("Unable to add program {} ({})", program_name, program_id);

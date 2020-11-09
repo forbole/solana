@@ -13,7 +13,7 @@ use std::{
 
 use crate::Config;
 
-// for filter validator by stake percentage, quality
+// for filter validator by stake percentage, quality and commission
 fn filter_validators(
     config: &Config,
     vote: RpcVoteAccountInfo,
@@ -23,9 +23,15 @@ fn filter_validators(
     let node_pubkey = Pubkey::from_str(&vote.node_pubkey).ok()?;
     let is_quality_producers = quality_block_producers.contains(&node_pubkey);
     let activated_stake_percentage: f64 = 100.0 * vote.activated_stake as f64 / total_activated_stake as f64;
-    let is_percentage_in_range = activated_stake_percentage <= config.stake_percentage_cap;
+    let is_stake_percentage_in_range = activated_stake_percentage <= config.stake_percentage_cap;
+    let is_commission_rate_in_range = vote.commission <= config.commission_cap; 
     let is_over_min_stake_required = vote.activated_stake > 500;
-    let is_fit_all_conditions = is_quality_producers && is_percentage_in_range && is_over_min_stake_required;
+
+    let is_fit_all_conditions = is_quality_producers 
+        && is_stake_percentage_in_range
+        && is_over_min_stake_required
+        && is_commission_rate_in_range;
+    
     if is_fit_all_conditions {
         Some(vote)
     } else {

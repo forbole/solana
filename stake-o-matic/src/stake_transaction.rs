@@ -20,16 +20,20 @@ struct AccountStatus {
 // check account delegation status via rpc
 fn check_account_status(
     rpc_client: &RpcClient,
+    epoch_info: &EpochInfo,
     stake_address: &Pubkey,
-    vote_pubkey: &Pubkey,
-    config: &Config
+    config: &Config,
+    account_type: String,
 ) -> AccountStatus {
     let mut status = AccountStatus {
         is_exist: false,
         is_deactivating: false,
         is_undelegated: true,
     };
-    let stake_amount = config.baseline_stake_amount;
+    let mut stake_amount = config.baseline_stake_amount;
+    if account_type == "bonus" {
+        stake_amount = config.bonus_stake_amount;
+    }
 
     if let Ok((balance, stake_state)) = get_stake_account(&rpc_client, &stake_address) {
         status.is_exist = true;
@@ -40,9 +44,13 @@ fn check_account_status(
             );
         }
         if let Some(delegation) = stake_state.delegation() {
-            status.is_undelegated = delegation.voter_pubkey != *vote_pubkey;
-            // epoch the stake was deactivated, std::Epoch::MAX if not deactivated
-            status.is_deactivating = delegation.deactivation_epoch != u64::MAX;
+            status.is_undelegated = false;
+            // epoch the stake was deactivating
+            status.is_deactivating = delegation.deactivation_epoch == epoch_info.epoch;
+            if !status.is_deactivating {
+                let cool_down = 0;
+                status.is_undelegated = delegation.deactivation_epoch + cool_down < epoch_info.epoch;
+            }
         }
     }
     return status;
