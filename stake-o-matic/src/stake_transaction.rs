@@ -22,19 +22,14 @@ fn check_account_status(
     rpc_client: &RpcClient,
     epoch_info: &EpochInfo,
     stake_address: &Pubkey,
-    config: &Config,
-    account_type: String,
+    config: &Config
 ) -> AccountStatus {
     let mut status = AccountStatus {
         is_exist: false,
         is_deactivating: false,
         is_undelegated: true,
     };
-    let mut stake_amount = config.baseline_stake_amount;
-    if account_type == "bonus" {
-        stake_amount = config.bonus_stake_amount;
-    }
-
+    let stake_amount = config.baseline_stake_amount;
     if let Ok((balance, stake_state)) = get_stake_account(&rpc_client, &stake_address) {
         status.is_exist = true;
         if balance != stake_amount {
@@ -164,8 +159,8 @@ pub fn generate_stake_transactions(
         // Check baseline status
         let baseline_status = check_account_status(
             &rpc_client,
+            &epoch_info,
             &baseline_stake_address,
-            &vote_pubkey,
             &config,
         );
 
