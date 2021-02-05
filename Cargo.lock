@@ -4161,8 +4161,8 @@ dependencies = [
  "solana-remote-wallet",
  "solana-sdk",
  "thiserror",
- "tiny-bip39 0.7.3",
- "url 2.1.1",
+ "tiny-bip39 0.8.0",
+ "url 2.2.0",
 ]
 
 [[package]]
@@ -4208,7 +4208,7 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tiny-bip39 0.7.3",
- "url 2.1.1",
+ "url 2.2.0",
 ]
 
 [[package]]
