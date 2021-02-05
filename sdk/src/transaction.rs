@@ -1,6 +1,5 @@
 //! Defines a Transaction type to package an atomic sequence of instructions.
-
-#![cfg(feature = "full")]
+#![cfg(any(feature = "full", feature = "wasm-bindgen"))]
 
 use crate::sanitize::{Sanitize, SanitizeError};
 use crate::secp256k1_instruction::verify_eth_addresses;
@@ -20,7 +19,8 @@ use std::result;
 use thiserror::Error;
 
 /// Reasons a transaction might be rejected.
-#[derive(Error, Serialize, Deserialize, Debug, PartialEq, Eq, Clone, AbiExample, AbiEnumVisitor)]
+#[derive(Error, Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(AbiExample, AbiEnumVisitor))]
 pub enum TransactionError {
     /// An account is already being processed in another transaction in a way
     /// that does not support parallelism
@@ -103,8 +103,15 @@ impl From<SanitizeError> for TransactionError {
 }
 
 /// An atomic transaction
-#[frozen_abi(digest = "2Kr1C1pRytLsmUbg8p2nLoZyrjrEQCriAYLTCYvwj1Fo")]
-#[derive(Debug, PartialEq, Default, Eq, Clone, Serialize, Deserialize, AbiExample)]
+#[cfg_attr(
+    not(target_arch = "wasm32"),
+    frozen_abi(digest = "2Kr1C1pRytLsmUbg8p2nLoZyrjrEQCriAYLTCYvwj1Fo")
+)]
+#[derive(Debug, PartialEq, Default, Eq, Clone, Serialize, Deserialize)]
+#[cfg_attr(
+    not(target_arch = "wasm32"),
+    derive(AbiExample)
+)]
 pub struct Transaction {
     /// A set of digital signatures of `account_keys`, `program_ids`, `recent_blockhash`, and `instructions`, signed by the first
     /// signatures.len() keys of account_keys

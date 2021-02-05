@@ -52,8 +52,15 @@ impl<E> DecodeError<E> for NonceError {
 /// maximum permitted size of data: 10 MB
 pub const MAX_PERMITTED_DATA_LENGTH: u64 = 10 * 1024 * 1024;
 
-#[frozen_abi(digest = "2xnDcizcPKKR7b624FeuuPd1zj5bmnkmVsBWgoKPTh4w")]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, AbiExample, AbiEnumVisitor)]
+#[cfg_attr(
+    not(target_arch = "wasm32"),
+    frozen_abi(digest = "2xnDcizcPKKR7b624FeuuPd1zj5bmnkmVsBWgoKPTh4w")
+)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[cfg_attr(
+    not(target_arch = "wasm32"),
+    derive(AbiExample, AbiEnumVisitor)
+)]
 pub enum SystemInstruction {
     /// Create a new account
     ///

@@ -8,7 +8,8 @@ use std::ops::Deref;
 
 pub const MAX_ENTRIES: usize = 512; // it should never take as many as 512 epochs to warm up or cool down
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Default, Clone, AbiExample)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Default, Clone)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(AbiExample))]
 pub struct StakeHistoryEntry {
     pub effective: u64,    // effective stake at this epoch
     pub activating: u64,   // sum of portion of stakes not fully warmed up
@@ -16,7 +17,8 @@ pub struct StakeHistoryEntry {
 }
 
 #[repr(C)]
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Default, Clone, AbiExample)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Default, Clone)]
+#[cfg_attr(not(target_arch = "wasm32"),  derive(AbiExample))]
 pub struct StakeHistory(Vec<(Epoch, StakeHistoryEntry)>);
 
 impl StakeHistory {
