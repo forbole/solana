@@ -1441,7 +1441,6 @@ dependencies = [
  "cfg-if 0.1.10",
  "libc",
  "wasi",
- "wasm-bindgen",
 ]
 
 [[package]]
@@ -5493,7 +5492,6 @@ dependencies = [
  "hmac 0.10.1",
  "js-sys",
  "pbkdf2 0.7.2",
- "rand 0.7.3",
  "serde",
  "sha2 0.9.3",
  "solana-program 1.6.0",
