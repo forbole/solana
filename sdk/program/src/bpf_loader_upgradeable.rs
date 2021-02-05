@@ -19,7 +19,8 @@ use bincode::serialized_size;
 crate::declare_id!("BPFLoaderUpgradeab1e11111111111111111111111");
 
 /// Upgradeable loader account states
-#[derive(Debug, Serialize, Deserialize, PartialEq, Clone, Copy, AbiExample)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone, Copy)]
+#[cfg_attr(not(target_arch = "wasm32"),  derive(AbiExample))]
 pub enum UpgradeableLoaderState {
     /// Account is not initialized.
     Uninitialized,

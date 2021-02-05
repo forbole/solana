@@ -424,7 +424,8 @@ lazy_static! {
 }
 
 /// `FeatureSet` holds the set of currently active/inactive runtime features
-#[derive(AbiExample, Debug, Clone)]
+#[derive(Debug, Clone)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(AbiExample))]
 pub struct FeatureSet {
     pub active: HashMap<Pubkey, Slot>,
     pub inactive: HashSet<Pubkey>,

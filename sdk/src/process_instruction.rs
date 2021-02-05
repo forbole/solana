@@ -96,7 +96,8 @@ macro_rules! ic_msg {
     };
 }
 
-#[derive(Clone, Copy, Debug, AbiExample)]
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(AbiExample))]
 pub struct BpfComputeBudget {
     /// Number of compute units that an instruction is allowed.  Compute units
     /// are consumed by program execution, resources they use, etc...

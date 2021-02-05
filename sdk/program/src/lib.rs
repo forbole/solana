@@ -10,8 +10,6 @@ pub mod bpf_loader_deprecated;
 pub mod bpf_loader_upgradeable;
 pub mod clock;
 pub mod decode_error;
-pub mod entrypoint;
-pub mod entrypoint_deprecated;
 pub mod epoch_schedule;
 pub mod feature;
 pub mod fee_calculator;
@@ -24,11 +22,6 @@ pub mod log;
 pub mod message;
 pub mod native_token;
 pub mod nonce;
-pub mod program;
-pub mod program_error;
-pub mod program_option;
-pub mod program_pack;
-pub mod program_stubs;
 pub mod pubkey;
 pub mod rent;
 pub mod sanitize;
@@ -41,6 +34,15 @@ pub mod stake_history;
 pub mod system_instruction;
 pub mod system_program;
 pub mod sysvar;
+
+pub mod entrypoint;
+pub mod entrypoint_deprecated;
+pub mod program;
+pub mod program_error;
+pub mod program_option;
+pub mod program_pack;
+pub mod program_stubs;
+
 
 /// Convenience macro to declare a static public key and functions to interact with it
 ///
@@ -68,5 +70,6 @@ pub use solana_sdk_macro::program_declare_id as declare_id;
 #[macro_use]
 extern crate serde_derive;
 
-#[macro_use]
+#[cfg(not(target_arch = "wasm32"))]
+#[cfg_attr(not(target_arch = "wasm32"), macro_use)]
 extern crate solana_frozen_abi_macro;

@@ -3,7 +3,8 @@ use crate::message::Message;
 use crate::secp256k1_program;
 use log::*;
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, AbiExample)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug)]
+#[cfg_attr(not(target_arch = "wasm32"),  derive(AbiExample))]
 #[serde(rename_all = "camelCase")]
 pub struct FeeCalculator {
     // The current cost of a signature  This amount may increase/decrease over time based on
@@ -62,7 +63,8 @@ impl FeeCalculator {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, AbiExample)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(AbiExample))]
 #[serde(rename_all = "camelCase")]
 pub struct FeeRateGovernor {
     // The current cost of a signature  This amount may increase/decrease over time based on

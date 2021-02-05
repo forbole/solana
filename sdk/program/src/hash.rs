@@ -7,8 +7,9 @@ use thiserror::Error;
 
 pub const HASH_BYTES: usize = 32;
 #[derive(
-    Serialize, Deserialize, Clone, Copy, Default, Eq, PartialEq, Ord, PartialOrd, Hash, AbiExample,
+    Serialize, Deserialize, Clone, Copy, Default, Eq, PartialEq, Ord, PartialOrd, Hash
 )]
+#[cfg_attr(not(target_arch = "wasm32"), derive(AbiExample))]
 #[repr(transparent)]
 pub struct Hash(pub [u8; HASH_BYTES]);
 

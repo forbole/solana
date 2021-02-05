@@ -1,4 +1,5 @@
-#![cfg(feature = "full")]
+#![cfg(any(feature = "full", feature = "wasm-bindgen"))]
+
 use crate::{
     pubkey::Pubkey,
     signature::{Signature, Signer, SignerError},
