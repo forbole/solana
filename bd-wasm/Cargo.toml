@@ -1,0 +1,31 @@
+[package]
+name = "bd-solana-wasm"
+version = "0.1.0"
+authors = ["Paul <p22626262@gmail.com>"]
+edition = "2018"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+
+[dependencies]
+solana-sdk = { path = "../sdk", default-features = false, features = ["wasm-bindgen"] }
+solana-program = { path = "../sdk/program" }
+ed25519-dalek = "=1.0.0-pre.4"
+js-sys = "0.3.47"
+tiny-bip39 = { version = "0.8.0" }
+wasm-bindgen = { version = "0.2.65", features = ["serde-serialize"]}
+wasm-bindgen-test = "0.3.20"
+serde = { version = "1.0", features = ["derive"] }
+pbkdf2 = { version = "0.7.2", default-features = false }
+hmac = "0.10.1"
+sha2 = "0.9.3"
+unicode-normalization = "0.1.16"
+bincode = "1.3.1"
+bs58 = "0.4.0"
+base64 = "0.13.0"
+
+[dev-dependencies]
+hex-literal = "0.3.1"
+
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = true

@@ -71,7 +71,7 @@ members = [
     "cli",
     "rayon-threadlimit",
     "watchtower",
-    "wasm"
+    "bd-wasm"
 ]
 
 exclude = [
