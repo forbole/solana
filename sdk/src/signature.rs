@@ -67,7 +67,7 @@ const MAX_BASE58_SIGNATURE_LEN: usize = 88;
 #[derive(
     Serialize, Deserialize, Clone, Copy, Default, Eq, PartialEq, Ord, PartialOrd, Hash,
 )]
-#[cfg_attr(not(feature = "wasm-bindgen"), derive(AbiExample))]
+#[cfg_attr(not(target_arch = "wasm32"), derive(AbiExample))]
 pub struct Signature(GenericArray<u8, U64>);
 
 impl crate::sanitize::Sanitize for Signature {}

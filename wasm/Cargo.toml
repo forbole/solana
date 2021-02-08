@@ -8,7 +8,7 @@ edition = "2018"
 crate-type = ["cdylib", "lib"]
 
 [dependencies]
-solana-sdk = { path = "../sdk", default-features = false, features = ["wasm-bindgen"] }
+solana-sdk = { path = "../sdk", version = "1.6.0", default-features = false, features = ["wasm-bindgen"] }
 solana-program = { path = "../sdk/program" }
 ed25519-dalek = { version = "1.0.0-pre.4", default-features = false}
 js-sys = "0.3.47"
