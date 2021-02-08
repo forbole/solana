@@ -105,13 +105,10 @@ impl From<SanitizeError> for TransactionError {
 /// An atomic transaction
 #[cfg_attr(
     not(target_arch = "wasm32"),
-    frozen_abi(digest = "2Kr1C1pRytLsmUbg8p2nLoZyrjrEQCriAYLTCYvwj1Fo")
-)]
-#[derive(Debug, PartialEq, Default, Eq, Clone, Serialize, Deserialize)]
-#[cfg_attr(
-    not(target_arch = "wasm32"),
+    frozen_abi(digest = "2Kr1C1pRytLsmUbg8p2nLoZyrjrEQCriAYLTCYvwj1Fo"),
     derive(AbiExample)
 )]
+#[derive(Debug, PartialEq, Default, Eq, Clone, Serialize, Deserialize)]
 pub struct Transaction {
     /// A set of digital signatures of `account_keys`, `program_ids`, `recent_blockhash`, and `instructions`, signed by the first
     /// signatures.len() keys of account_keys

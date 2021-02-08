@@ -54,13 +54,10 @@ pub const MAX_PERMITTED_DATA_LENGTH: u64 = 10 * 1024 * 1024;
 
 #[cfg_attr(
     not(target_arch = "wasm32"),
-    frozen_abi(digest = "2xnDcizcPKKR7b624FeuuPd1zj5bmnkmVsBWgoKPTh4w")
-)]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-#[cfg_attr(
-    not(target_arch = "wasm32"),
+    frozen_abi(digest = "2xnDcizcPKKR7b624FeuuPd1zj5bmnkmVsBWgoKPTh4w"),
     derive(AbiExample, AbiEnumVisitor)
 )]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum SystemInstruction {
     /// Create a new account
     ///

@@ -70,5 +70,5 @@ pub use solana_sdk_macro::program_declare_id as declare_id;
 extern crate serde_derive;
 
 #[cfg(not(target_arch = "wasm32"))]
-#[cfg_attr(not(target_arch = "wasm32"), macro_use)]
+#[macro_use]
 extern crate solana_frozen_abi_macro;
