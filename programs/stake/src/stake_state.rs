@@ -24,7 +24,8 @@ use solana_sdk::{
 use solana_vote_program::vote_state::{VoteState, VoteStateVersions};
 use std::{collections::HashSet, convert::TryFrom};
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Clone, Copy, AbiExample)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(AbiExample))]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone, Copy]
 #[allow(clippy::large_enum_variant)]
 pub enum StakeState {
     Uninitialized,
@@ -117,13 +118,15 @@ impl StakeState {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Clone, Copy, AbiExample)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(AbiExample))]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone, Copy)]
 pub enum StakeAuthorize {
     Staker,
     Withdrawer,
 }
 
-#[derive(Default, Debug, Serialize, Deserialize, PartialEq, Clone, Copy, AbiExample)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(AbiExample))]
+#[derive(Default, Debug, Serialize, Deserialize, PartialEq, Clone, Copy)]
 pub struct Lockup {
     /// UnixTimestamp at which this stake will allow withdrawal, unless the
     ///   transaction is signed by the custodian
@@ -145,13 +148,15 @@ impl Lockup {
     }
 }
 
-#[derive(Default, Debug, Serialize, Deserialize, PartialEq, Clone, Copy, AbiExample)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(AbiExample))]
+#[derive(Default, Debug, Serialize, Deserialize, PartialEq, Clone, Copy)]
 pub struct Authorized {
     pub staker: Pubkey,
     pub withdrawer: Pubkey,
 }
 
-#[derive(Default, Debug, Serialize, Deserialize, PartialEq, Clone, Copy, AbiExample)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(AbiExample))]
+#[derive(Default, Debug, Serialize, Deserialize, PartialEq, Clone, Copy)]
 pub struct Meta {
     pub rent_exempt_reserve: u64,
     pub authorized: Authorized,
@@ -198,7 +203,8 @@ impl Meta {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Clone, Copy, AbiExample)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(AbiExample))]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone, Copy)]
 pub struct Delegation {
     /// to whom the stake is delegated
     pub voter_pubkey: Pubkey,
@@ -447,7 +453,8 @@ impl Delegation {
     }
 }
 
-#[derive(Debug, Default, Serialize, Deserialize, PartialEq, Clone, Copy, AbiExample)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(AbiExample))]
+#[derive(Debug, Default, Serialize, Deserialize, PartialEq, Clone, Copy)]
 pub struct Stake {
     pub delegation: Delegation,
     /// credits observed is credits from vote account state when delegated or redeemed
