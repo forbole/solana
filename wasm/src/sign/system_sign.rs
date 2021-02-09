@@ -1,8 +1,10 @@
-use crate::sign::{generate_transaction_with_instruction_and_hash, serialize_encode_transaction};
+use crate::sign::{serialize_encode_transaction};
 use solana_sdk::{
     hash::Hash,
     signature::{Signer, keypair_from_seed_phrase_and_passphrase},
     pubkey::Pubkey,
+    message::Message,
+    transaction::Transaction,
 };
 use solana_program::system_instruction;
 use std::str::FromStr;
@@ -22,7 +24,9 @@ pub fn transfer(
 
     let instruction = system_instruction::transfer(&from_pubkey, &to_pubkey, lamports as u64);
     let recent_hash = Hash::from_str(blockhash).unwrap();
-    let tx = generate_transaction_with_instruction_and_hash(&from_keypair, &[instruction], recent_hash);
+    let message = Message::new(&[instruction], Some(&from_keypair.pubkey()));
+    let signers = [&from_keypair];
+    let tx = Transaction::new(&signers, message, recent_hash);
     Ok(serialize_encode_transaction(&tx))
 }
 

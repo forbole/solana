@@ -1,7 +1,7 @@
 pub use solana_program::hash::*;
 
 /// random hash value for tests and benchmarks.
-#[cfg(any(feature = "full", feature = "wasm-bindgen"))]
+#[cfg(any(feature = "full", target_arch = "wasm32"))]
 pub fn new_rand<R: ?Sized>(rng: &mut R) -> Hash
 where
     R: rand::Rng,
