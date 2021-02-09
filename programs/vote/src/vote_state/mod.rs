@@ -33,8 +33,12 @@ pub const INITIAL_LOCKOUT: usize = 2;
 // Maximum number of credits history to keep around
 const MAX_EPOCH_CREDITS_HISTORY: usize = 64;
 
-#[frozen_abi(digest = "Ch2vVEwos2EjAVqSHCyJjnN2MNX1yrpapZTGhMSCjWUH")]
-#[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone, AbiExample)]
+#[cfg_attr(
+    not(target_arch = "wasm32"),
+    frozen_abi(digest = "Ch2vVEwos2EjAVqSHCyJjnN2MNX1yrpapZTGhMSCjWUH"),
+    derive(AbiExample)
+)]
+#[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Vote {
     /// A stack of votes starting with the oldest vote
     pub slots: Vec<Slot>,
@@ -58,7 +62,8 @@ impl Vote {
     }
 }
 
-#[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone, AbiExample)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(AbiExample))]
+#[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Lockout {
     pub slot: Slot,
     pub confirmation_count: u32,
@@ -101,7 +106,8 @@ pub enum VoteAuthorize {
     Withdrawer,
 }
 
-#[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone, AbiExample)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(AbiExample))]
+#[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct BlockTimestamp {
     pub slot: Slot,
     pub timestamp: UnixTimestamp,
@@ -110,7 +116,8 @@ pub struct BlockTimestamp {
 // this is how many epochs a voter can be remembered for slashing
 const MAX_ITEMS: usize = 32;
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, AbiExample)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(AbiExample))]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct CircBuf<I> {
     buf: [I; MAX_ITEMS],
     /// next pointer
@@ -151,8 +158,12 @@ impl<I> CircBuf<I> {
     }
 }
 
-#[frozen_abi(digest = "331ZmXrmsUcwbKhzR3C1UEU6uNwZr48ExE54JDKGWA4w")]
-#[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone, AbiExample)]
+#[cfg_attr(
+    not(target_arch = "wasm32"),
+    frozen_abi(digest = "331ZmXrmsUcwbKhzR3C1UEU6uNwZr48ExE54JDKGWA4w"),
+    derive(AbiExample)
+)]
+#[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct VoteState {
     /// the node that votes in this account
     pub node_pubkey: Pubkey,
@@ -322,6 +333,7 @@ impl VoteState {
                 "{} dropped vote {:?} failed to match slot:  {:?}",
                 self.node_pubkey, vote, slot_hashes,
             );
+            #[cfg(not(target_arch = "wasm32"))]
             inc_new_counter_info!("dropped-vote-slot", 1);
             return Err(VoteError::SlotsMismatch);
         }
@@ -330,6 +342,7 @@ impl VoteState {
                 "{} dropped vote {:?} failed to match hash {} {}",
                 self.node_pubkey, vote, vote.hash, slot_hashes[j].1
             );
+            #[cfg(not(target_arch = "wasm32"))]
             inc_new_counter_info!("dropped-vote-hash", 1);
             return Err(VoteError::SlotHashMismatch);
         }

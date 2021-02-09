@@ -25,7 +25,7 @@ use solana_vote_program::vote_state::{VoteState, VoteStateVersions};
 use std::{collections::HashSet, convert::TryFrom};
 
 #[cfg_attr(not(target_arch = "wasm32"), derive(AbiExample))]
-#[derive(Debug, Serialize, Deserialize, PartialEq, Clone, Copy]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone, Copy)]
 #[allow(clippy::large_enum_variant)]
 pub enum StakeState {
     Uninitialized,

@@ -77,3 +77,4 @@ members = [
 exclude = [
     "programs/bpf",
 ]
+resolver = "2"

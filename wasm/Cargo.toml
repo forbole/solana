@@ -10,9 +10,9 @@ crate-type = ["cdylib", "lib"]
 [dependencies]
 solana-sdk = { path = "../sdk", version = "1.6.0", default-features = false, features = ["wasm-bindgen"] }
 solana-program = { path = "../sdk/program" }
+solana-stake-program = { path = "../programs/stake" }
 ed25519-dalek = { version = "1.0.0-pre.4", default-features = false}
-js-sys = "0.3.47"
-tiny-bip39 = { version = "0.8.0" }
+tiny-bip39 = "0.8.0"
 wasm-bindgen = { version = "0.2.65", features = ["serde-serialize"]}
 wasm-bindgen-test = "0.3.20"
 serde = { version = "1.0", features = ["derive"] }
