@@ -4,9 +4,12 @@ use bincode::{deserialize, serialized_size};
 use serde_derive::{Deserialize, Serialize};
 use solana_config_program::{create_config_account, get_config_data, ConfigState};
 use solana_sdk::{
-    account::Account, genesis_config::GenesisConfig, instruction::InstructionError,
+    account::Account, instruction::InstructionError,
     keyed_account::KeyedAccount,
 };
+
+#[cfg(not(target_arch = "wasm32"))]
+use solana_sdk::genesis_config::GenesisConfig;
 
 // stake config ID
 solana_sdk::declare_id!("StakeConfig11111111111111111111111111111111");
@@ -47,6 +50,7 @@ impl ConfigState for Config {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 pub fn add_genesis_account(genesis_config: &mut GenesisConfig) -> u64 {
     let mut account = create_config_account(vec![], &Config::default(), 0);
     let lamports = genesis_config.rent.minimum_balance(account.data.len());
