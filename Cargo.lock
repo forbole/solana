@@ -2789,15 +2789,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pbkdf2"
-version = "0.7.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5e9dbbc79255e181e64afb7aee37d3b7e2e0925c20a6b05bba3ebe8ed82e6bfa"
-dependencies = [
- "crypto-mac 0.10.0",
-]
-
-[[package]]
 name = "peeking_take_while"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5239,7 +5230,6 @@ dependencies = [
  "solana-frozen-abi 1.6.0",
  "solana-frozen-abi-macro 1.6.0",
  "solana-logger 1.6.0",
- "solana-metrics",
  "solana-sdk",
  "solana-vote-program",
  "thiserror",
@@ -5488,18 +5478,13 @@ dependencies = [
  "base64 0.13.0",
  "bincode",
  "bs58 0.4.0",
- "ed25519-dalek",
  "hex-literal",
- "hmac 0.10.1",
- "pbkdf2 0.7.2",
  "rand 0.7.3",
  "serde",
- "sha2 0.9.3",
  "solana-program 1.6.0",
  "solana-sdk",
  "solana-stake-program",
  "tiny-bip39 0.8.0",
- "unicode-normalization",
  "wasm-bindgen",
  "wasm-bindgen-test",
 ]
