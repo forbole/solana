@@ -35,6 +35,21 @@ pub enum StakeState {
 }
 
 #[derive(Debug)]
+pub enum SkippedReason {
+    ZeroPoints,
+    ZeroPointValue,
+    ZeroReward,
+    ZeroCreditsAndReturnZero,
+    ZeroCreditsAndReturnCurrent,
+}
+
+impl From<SkippedReason> for InflationPointCalculationEvent {
+    fn from(reason: SkippedReason) -> Self {
+        InflationPointCalculationEvent::Skipped(reason)
+    }
+}
+
+#[derive(Debug)]
 pub enum InflationPointCalculationEvent {
     CalculatedPoints(u64, u128, u128, u128),
     SplitRewards(u64, u64, u64, PointValue),
@@ -42,7 +57,8 @@ pub enum InflationPointCalculationEvent {
     RentExemptReserve(u64),
     Delegation(Delegation, Pubkey),
     Commission(u8),
-    CreditsObserved(u64, u64),
+    CreditsObserved(u64, Option<u64>),
+    Skipped(SkippedReason),
 }
 
 pub(crate) fn null_tracer() -> Option<impl FnMut(&InflationPointCalculationEvent)> {
@@ -550,6 +566,12 @@ impl Stake {
         inflation_point_calc_tracer: &mut Option<impl FnMut(&InflationPointCalculationEvent)>,
         fix_stake_deactivate: bool,
     ) -> Option<(u64, u64)> {
+        if let Some(inflation_point_calc_tracer) = inflation_point_calc_tracer {
+            inflation_point_calc_tracer(&InflationPointCalculationEvent::CreditsObserved(
+                self.credits_observed,
+                None,
+            ));
+        }
         self.calculate_rewards(
             point_value,
             vote_state,
@@ -561,7 +583,7 @@ impl Stake {
             if let Some(inflation_point_calc_tracer) = inflation_point_calc_tracer {
                 inflation_point_calc_tracer(&InflationPointCalculationEvent::CreditsObserved(
                     self.credits_observed,
-                    credits_observed,
+                    Some(credits_observed),
                 ));
             }
             self.credits_observed = credits_observed;
@@ -599,8 +621,14 @@ impl Stake {
         // if there is no newer credits since observed, return no point
         if new_vote_state.credits() <= self.credits_observed {
             if fix_stake_deactivate {
+                if let Some(inflation_point_calc_tracer) = inflation_point_calc_tracer {
+                    inflation_point_calc_tracer(&SkippedReason::ZeroCreditsAndReturnCurrent.into());
+                }
                 return (0, self.credits_observed);
             } else {
+                if let Some(inflation_point_calc_tracer) = inflation_point_calc_tracer {
+                    inflation_point_calc_tracer(&SkippedReason::ZeroCreditsAndReturnZero.into());
+                }
                 return (0, 0);
             }
         }
@@ -678,7 +706,16 @@ impl Stake {
             return Some((0, 0, credits_observed));
         }
 
-        if points == 0 || point_value.points == 0 {
+        if points == 0 {
+            if let Some(inflation_point_calc_tracer) = inflation_point_calc_tracer {
+                inflation_point_calc_tracer(&SkippedReason::ZeroPoints.into());
+            }
+            return None;
+        }
+        if point_value.points == 0 {
+            if let Some(inflation_point_calc_tracer) = inflation_point_calc_tracer {
+                inflation_point_calc_tracer(&SkippedReason::ZeroPointValue.into());
+            }
             return None;
         }
 
@@ -692,6 +729,9 @@ impl Stake {
 
         // don't bother trying to split if fractional lamports got truncated
         if rewards == 0 {
+            if let Some(inflation_point_calc_tracer) = inflation_point_calc_tracer {
+                inflation_point_calc_tracer(&SkippedReason::ZeroReward.into());
+            }
             return None;
         }
         let (voter_rewards, staker_rewards, is_split) = vote_state.commission_split(rewards);
