@@ -3920,10 +3920,10 @@ dependencies = [
  "serde",
  "serde_derive",
  "serde_json",
- "solana-config-program",
- "solana-sdk",
- "solana-stake-program",
- "solana-vote-program",
+ "solana-config-program 1.6.0",
+ "solana-sdk 1.6.0",
+ "solana-stake-program 1.6.0",
+ "solana-vote-program 1.6.0",
  "spl-token 3.0.1",
  "thiserror",
  "zstd",
@@ -3941,7 +3941,7 @@ dependencies = [
  "solana-logger 1.6.0",
  "solana-measure",
  "solana-runtime",
- "solana-sdk",
+ "solana-sdk 1.6.0",
  "solana-version",
 ]
 
@@ -3961,7 +3961,7 @@ dependencies = [
  "solana-measure",
  "solana-perf",
  "solana-runtime",
- "solana-sdk",
+ "solana-sdk 1.6.0",
  "solana-streamer",
  "solana-version",
 ]
@@ -3976,7 +3976,7 @@ dependencies = [
  "solana-banks-interface",
  "solana-banks-server",
  "solana-runtime",
- "solana-sdk",
+ "solana-sdk 1.6.0",
  "tarpc",
  "tokio 1.1.1",
  "tokio-serde",
@@ -3988,7 +3988,7 @@ version = "1.6.0"
 dependencies = [
  "mio 0.7.6",
  "serde",
- "solana-sdk",
+ "solana-sdk 1.6.0",
  "tarpc",
  "tokio 1.1.1",
 ]
@@ -4002,9 +4002,9 @@ dependencies = [
  "log 0.4.11",
  "mio 0.7.6",
  "solana-banks-interface",
- "solana-metrics",
+ "solana-metrics 1.6.0",
  "solana-runtime",
- "solana-sdk",
+ "solana-sdk 1.6.0",
  "tarpc",
  "tokio 1.1.1",
  "tokio-serde",
@@ -4032,10 +4032,10 @@ dependencies = [
  "solana-genesis",
  "solana-local-cluster",
  "solana-logger 1.6.0",
- "solana-metrics",
+ "solana-metrics 1.6.0",
  "solana-net-utils",
  "solana-runtime",
- "solana-sdk",
+ "solana-sdk 1.6.0",
  "solana-version",
 ]
 
@@ -4070,10 +4070,10 @@ dependencies = [
  "solana-local-cluster",
  "solana-logger 1.6.0",
  "solana-measure",
- "solana-metrics",
+ "solana-metrics 1.6.0",
  "solana-net-utils",
  "solana-runtime",
- "solana-sdk",
+ "solana-sdk 1.6.0",
  "solana-version",
 ]
 
@@ -4090,7 +4090,7 @@ dependencies = [
  "rand_core 0.6.2",
  "rustversion",
  "solana-runtime",
- "solana-sdk",
+ "solana-sdk 1.6.0",
  "solana_rbpf",
  "thiserror",
 ]
@@ -4107,7 +4107,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "solana-runtime",
- "solana-sdk",
+ "solana-sdk 1.6.0",
  "thiserror",
 ]
 
@@ -4117,7 +4117,7 @@ version = "1.6.0"
 dependencies = [
  "cargo_metadata",
  "clap",
- "solana-sdk",
+ "solana-sdk 1.6.0",
 ]
 
 [[package]]
@@ -4136,7 +4136,7 @@ dependencies = [
  "clap",
  "rpassword",
  "solana-remote-wallet",
- "solana-sdk",
+ "solana-sdk 1.6.0",
  "thiserror",
  "tiny-bip39 0.8.0",
  "url 2.2.0",
@@ -4170,17 +4170,17 @@ dependencies = [
  "solana-cli-config",
  "solana-cli-output",
  "solana-client",
- "solana-config-program",
+ "solana-config-program 1.6.0",
  "solana-core",
  "solana-faucet",
  "solana-logger 1.6.0",
  "solana-net-utils",
  "solana-remote-wallet",
- "solana-sdk",
- "solana-stake-program",
+ "solana-sdk 1.6.0",
+ "solana-stake-program 1.6.0",
  "solana-transaction-status",
  "solana-version",
- "solana-vote-program",
+ "solana-vote-program 1.6.0",
  "solana_rbpf",
  "tempfile",
  "thiserror",
@@ -4215,10 +4215,10 @@ dependencies = [
  "solana-account-decoder",
  "solana-clap-utils",
  "solana-client",
- "solana-sdk",
- "solana-stake-program",
+ "solana-sdk 1.6.0",
+ "solana-stake-program 1.6.0",
  "solana-transaction-status",
- "solana-vote-program",
+ "solana-vote-program 1.6.0",
 ]
 
 [[package]]
@@ -4245,10 +4245,10 @@ dependencies = [
  "solana-clap-utils",
  "solana-logger 1.6.0",
  "solana-net-utils",
- "solana-sdk",
+ "solana-sdk 1.6.0",
  "solana-transaction-status",
  "solana-version",
- "solana-vote-program",
+ "solana-vote-program 1.6.0",
  "thiserror",
  "tungstenite",
  "url 2.2.0",
@@ -4265,7 +4265,21 @@ dependencies = [
  "serde",
  "serde_derive",
  "solana-logger 1.6.0",
- "solana-sdk",
+ "solana-sdk 1.6.0",
+]
+
+[[package]]
+name = "solana-config-program"
+version = "1.6.0"
+source = "git+https://github.com/forbole/solana?branch=wasm#833aeff1b7eafb9494b9ad87e54665fd21af7f02"
+dependencies = [
+ "bincode",
+ "chrono",
+ "log 0.4.11",
+ "rand_core 0.6.2",
+ "serde",
+ "serde_derive",
+ "solana-sdk 1.6.0 (git+https://github.com/forbole/solana?branch=wasm)",
 ]
 
 [[package]]
@@ -4325,20 +4339,20 @@ dependencies = [
  "solana-logger 1.6.0",
  "solana-measure",
  "solana-merkle-tree",
- "solana-metrics",
+ "solana-metrics 1.6.0",
  "solana-net-utils",
  "solana-perf",
  "solana-program-test",
  "solana-rayon-threadlimit",
  "solana-runtime",
- "solana-sdk",
- "solana-stake-program",
+ "solana-sdk 1.6.0",
+ "solana-stake-program 1.6.0",
  "solana-storage-bigtable",
  "solana-streamer",
  "solana-sys-tuner",
  "solana-transaction-status",
  "solana-version",
- "solana-vote-program",
+ "solana-vote-program 1.6.0",
  "spl-token 3.0.1",
  "systemstat",
  "tempfile",
@@ -4352,6 +4366,29 @@ dependencies = [
 [[package]]
 name = "solana-crate-features"
 version = "1.6.0"
+dependencies = [
+ "backtrace",
+ "bytes 0.4.12",
+ "cc",
+ "curve25519-dalek 2.1.0",
+ "ed25519-dalek",
+ "either",
+ "lazy_static",
+ "libc",
+ "rand_chacha 0.2.2",
+ "regex-syntax",
+ "reqwest 0.10.8",
+ "serde",
+ "syn 0.15.44",
+ "syn 1.0.60",
+ "tokio 0.1.22",
+ "winapi 0.3.8",
+]
+
+[[package]]
+name = "solana-crate-features"
+version = "1.6.0"
+source = "git+https://github.com/forbole/solana?branch=wasm#833aeff1b7eafb9494b9ad87e54665fd21af7f02"
 dependencies = [
  "backtrace",
  "bytes 0.4.12",
@@ -4387,7 +4424,7 @@ dependencies = [
  "solana-logger 1.6.0",
  "solana-net-utils",
  "solana-runtime",
- "solana-sdk",
+ "solana-sdk 1.6.0",
  "solana-version",
 ]
 
@@ -4401,7 +4438,7 @@ dependencies = [
  "log 0.4.11",
  "reqwest 0.10.8",
  "solana-runtime",
- "solana-sdk",
+ "solana-sdk 1.6.0",
  "tar",
 ]
 
@@ -4416,9 +4453,9 @@ dependencies = [
  "serde",
  "serde_derive",
  "solana-logger 1.6.0",
- "solana-metrics",
+ "solana-metrics 1.6.0",
  "solana-runtime",
- "solana-sdk",
+ "solana-sdk 1.6.0",
  "thiserror",
 ]
 
@@ -4427,7 +4464,7 @@ name = "solana-failure-program"
 version = "1.6.0"
 dependencies = [
  "solana-runtime",
- "solana-sdk",
+ "solana-sdk 1.6.0",
 ]
 
 [[package]]
@@ -4443,8 +4480,8 @@ dependencies = [
  "solana-clap-utils",
  "solana-cli-config",
  "solana-logger 1.6.0",
- "solana-metrics",
- "solana-sdk",
+ "solana-metrics 1.6.0",
+ "solana-sdk 1.6.0",
  "solana-version",
  "tokio 1.1.1",
 ]
@@ -4559,11 +4596,11 @@ dependencies = [
  "solana-ledger",
  "solana-logger 1.6.0",
  "solana-runtime",
- "solana-sdk",
- "solana-stake-program",
+ "solana-sdk 1.6.0",
+ "solana-stake-program 1.6.0",
  "solana-version",
  "solana-vest-program",
- "solana-vote-program",
+ "solana-vote-program 1.6.0",
  "tempfile",
 ]
 
@@ -4577,7 +4614,7 @@ dependencies = [
  "solana-core",
  "solana-logger 1.6.0",
  "solana-net-utils",
- "solana-sdk",
+ "solana-sdk 1.6.0",
  "solana-version",
 ]
 
@@ -4603,9 +4640,9 @@ dependencies = [
  "serde_yaml",
  "solana-clap-utils",
  "solana-client",
- "solana-config-program",
+ "solana-config-program 1.6.0",
  "solana-logger 1.6.0",
- "solana-sdk",
+ "solana-sdk 1.6.0",
  "solana-version",
  "tar",
  "tempfile",
@@ -4625,7 +4662,7 @@ dependencies = [
  "solana-clap-utils",
  "solana-cli-config",
  "solana-remote-wallet",
- "solana-sdk",
+ "solana-sdk 1.6.0",
  "solana-version",
  "tiny-bip39 0.7.3",
 ]
@@ -4669,16 +4706,16 @@ dependencies = [
  "solana-logger 1.6.0",
  "solana-measure",
  "solana-merkle-tree",
- "solana-metrics",
+ "solana-metrics 1.6.0",
  "solana-perf",
  "solana-rayon-threadlimit",
  "solana-runtime",
- "solana-sdk",
- "solana-stake-program",
+ "solana-sdk 1.6.0",
+ "solana-stake-program 1.6.0",
  "solana-storage-bigtable",
  "solana-storage-proto",
  "solana-transaction-status",
- "solana-vote-program",
+ "solana-vote-program 1.6.0",
  "tempfile",
  "thiserror",
  "tokio 0.3.5",
@@ -4710,12 +4747,12 @@ dependencies = [
  "solana-logger 1.6.0",
  "solana-measure",
  "solana-runtime",
- "solana-sdk",
- "solana-stake-program",
+ "solana-sdk 1.6.0",
+ "solana-stake-program 1.6.0",
  "solana-storage-bigtable",
  "solana-transaction-status",
  "solana-version",
- "solana-vote-program",
+ "solana-vote-program 1.6.0",
  "tempfile",
  "tokio 1.1.1",
 ]
@@ -4733,7 +4770,7 @@ dependencies = [
  "rand 0.7.3",
  "serial_test",
  "solana-client",
- "solana-config-program",
+ "solana-config-program 1.6.0",
  "solana-core",
  "solana-download-utils",
  "solana-exchange-program",
@@ -4742,10 +4779,10 @@ dependencies = [
  "solana-logger 1.6.0",
  "solana-rayon-threadlimit",
  "solana-runtime",
- "solana-sdk",
- "solana-stake-program",
+ "solana-sdk 1.6.0",
+ "solana-stake-program 1.6.0",
  "solana-vest-program",
- "solana-vote-program",
+ "solana-vote-program 1.6.0",
  "tempfile",
 ]
 
@@ -4799,8 +4836,8 @@ dependencies = [
  "jemalloc-ctl",
  "jemallocator",
  "log 0.4.11",
- "solana-metrics",
- "solana-sdk",
+ "solana-metrics 1.6.0",
+ "solana-sdk 1.6.0",
 ]
 
 [[package]]
@@ -4812,7 +4849,7 @@ dependencies = [
  "solana-logger 1.6.0",
  "solana-measure",
  "solana-runtime",
- "solana-sdk",
+ "solana-sdk 1.6.0",
  "solana-version",
 ]
 
@@ -4822,7 +4859,7 @@ version = "1.6.0"
 dependencies = [
  "fast-math",
  "hex",
- "solana-sdk",
+ "solana-sdk 1.6.0",
 ]
 
 [[package]]
@@ -4836,7 +4873,20 @@ dependencies = [
  "rand 0.7.3",
  "reqwest 0.10.8",
  "serial_test",
- "solana-sdk",
+ "solana-sdk 1.6.0",
+]
+
+[[package]]
+name = "solana-metrics"
+version = "1.6.0"
+source = "git+https://github.com/forbole/solana?branch=wasm#833aeff1b7eafb9494b9ad87e54665fd21af7f02"
+dependencies = [
+ "env_logger 0.8.2",
+ "gethostname",
+ "lazy_static",
+ "log 0.4.11",
+ "reqwest 0.10.8",
+ "solana-sdk 1.6.0 (git+https://github.com/forbole/solana?branch=wasm)",
 ]
 
 [[package]]
@@ -4876,7 +4926,7 @@ version = "1.6.0"
 dependencies = [
  "log 0.4.11",
  "solana-logger 1.6.0",
- "solana-sdk",
+ "solana-sdk 1.6.0",
 ]
 
 [[package]]
@@ -4896,7 +4946,7 @@ dependencies = [
  "num-derive",
  "num-traits",
  "solana-runtime",
- "solana-sdk",
+ "solana-sdk 1.6.0",
  "thiserror",
 ]
 
@@ -4916,9 +4966,9 @@ dependencies = [
  "serde",
  "solana-budget-program",
  "solana-logger 1.6.0",
- "solana-metrics",
+ "solana-metrics 1.6.0",
  "solana-rayon-threadlimit",
- "solana-sdk",
+ "solana-sdk 1.6.0",
 ]
 
 [[package]]
@@ -4934,7 +4984,7 @@ dependencies = [
  "solana-logger 1.6.0",
  "solana-measure",
  "solana-perf",
- "solana-sdk",
+ "solana-sdk 1.6.0",
  "solana-version",
 ]
 
@@ -5043,9 +5093,9 @@ dependencies = [
  "solana-logger 1.6.0",
  "solana-program 1.6.0",
  "solana-runtime",
- "solana-sdk",
- "solana-stake-program",
- "solana-vote-program",
+ "solana-sdk 1.6.0",
+ "solana-stake-program 1.6.0",
+ "solana-vote-program 1.6.0",
  "thiserror",
  "tokio 1.1.1",
 ]
@@ -5064,11 +5114,11 @@ dependencies = [
  "solana-client",
  "solana-core",
  "solana-logger 1.6.0",
- "solana-metrics",
+ "solana-metrics 1.6.0",
  "solana-net-utils",
  "solana-notifier",
- "solana-sdk",
- "solana-stake-program",
+ "solana-sdk 1.6.0",
+ "solana-stake-program 1.6.0",
  "tar",
 ]
 
@@ -5093,7 +5143,7 @@ dependencies = [
  "num-traits",
  "parking_lot 0.10.2",
  "semver 0.9.0",
- "solana-sdk",
+ "solana-sdk 1.6.0",
  "thiserror",
  "url 2.2.0",
 ]
@@ -5130,18 +5180,18 @@ dependencies = [
  "rustc_version",
  "serde",
  "serde_derive",
- "solana-config-program",
+ "solana-config-program 1.6.0",
  "solana-frozen-abi 1.6.0",
  "solana-frozen-abi-macro 1.6.0",
  "solana-logger 1.6.0",
  "solana-measure",
- "solana-metrics",
+ "solana-metrics 1.6.0",
  "solana-noop-program",
  "solana-rayon-threadlimit",
- "solana-sdk",
+ "solana-sdk 1.6.0",
  "solana-secp256k1-program",
- "solana-stake-program",
- "solana-vote-program",
+ "solana-stake-program 1.6.0",
+ "solana-vote-program 1.6.0",
  "symlink",
  "tar",
  "tempfile",
@@ -5192,7 +5242,7 @@ dependencies = [
  "serde_json",
  "sha2 0.9.3",
  "sha3",
- "solana-crate-features",
+ "solana-crate-features 1.6.0",
  "solana-frozen-abi 1.6.0",
  "solana-frozen-abi-macro 1.6.0",
  "solana-logger 1.6.0",
@@ -5200,6 +5250,50 @@ dependencies = [
  "solana-sdk-macro 1.6.0",
  "thiserror",
  "tiny-bip39 0.7.3",
+]
+
+[[package]]
+name = "solana-sdk"
+version = "1.6.0"
+source = "git+https://github.com/forbole/solana?branch=wasm#833aeff1b7eafb9494b9ad87e54665fd21af7f02"
+dependencies = [
+ "assert_matches",
+ "bincode",
+ "bs58 0.3.1",
+ "bv",
+ "byteorder",
+ "chrono",
+ "digest 0.9.0",
+ "ed25519-dalek",
+ "generic-array 0.14.3",
+ "hex",
+ "hmac 0.10.1",
+ "itertools",
+ "lazy_static",
+ "libsecp256k1",
+ "log 0.4.11",
+ "memmap2",
+ "num-derive",
+ "num-traits",
+ "pbkdf2 0.6.0",
+ "rand 0.7.3",
+ "rand_chacha 0.2.2",
+ "rand_core 0.6.2",
+ "rustc_version",
+ "rustversion",
+ "serde",
+ "serde_bytes",
+ "serde_derive",
+ "serde_json",
+ "sha2 0.9.3",
+ "sha3",
+ "solana-crate-features 1.6.0 (git+https://github.com/forbole/solana?branch=wasm)",
+ "solana-frozen-abi 1.6.0 (git+https://github.com/forbole/solana?branch=wasm)",
+ "solana-frozen-abi-macro 1.6.0 (git+https://github.com/forbole/solana?branch=wasm)",
+ "solana-logger 1.6.0 (git+https://github.com/forbole/solana?branch=wasm)",
+ "solana-program 1.6.0 (git+https://github.com/forbole/solana?branch=wasm)",
+ "solana-sdk-macro 1.6.0 (git+https://github.com/forbole/solana?branch=wasm)",
+ "thiserror",
 ]
 
 [[package]]
@@ -5248,7 +5342,7 @@ dependencies = [
  "rand 0.7.3",
  "sha3",
  "solana-logger 1.6.0",
- "solana-sdk",
+ "solana-sdk 1.6.0",
 ]
 
 [[package]]
@@ -5261,8 +5355,8 @@ dependencies = [
  "solana-client",
  "solana-remote-wallet",
  "solana-runtime",
- "solana-sdk",
- "solana-stake-program",
+ "solana-sdk 1.6.0",
+ "solana-stake-program 1.6.0",
 ]
 
 [[package]]
@@ -5281,9 +5375,9 @@ dependencies = [
  "solana-core",
  "solana-local-cluster",
  "solana-logger 1.6.0",
- "solana-metrics",
- "solana-sdk",
- "solana-stake-program",
+ "solana-metrics 1.6.0",
+ "solana-sdk 1.6.0",
+ "solana-stake-program 1.6.0",
  "solana-transaction-status",
  "solana-version",
  "tempfile",
@@ -5301,10 +5395,10 @@ dependencies = [
  "solana-cli-output",
  "solana-client",
  "solana-logger 1.6.0",
- "solana-metrics",
+ "solana-metrics 1.6.0",
  "solana-notifier",
- "solana-sdk",
- "solana-stake-program",
+ "solana-sdk 1.6.0",
+ "solana-stake-program 1.6.0",
  "solana-transaction-status",
 ]
 
@@ -5319,12 +5413,32 @@ dependencies = [
  "rustc_version",
  "serde",
  "serde_derive",
- "solana-config-program",
+ "solana-config-program 1.6.0",
  "solana-frozen-abi 1.6.0",
  "solana-frozen-abi-macro 1.6.0",
  "solana-logger 1.6.0",
- "solana-sdk",
- "solana-vote-program",
+ "solana-sdk 1.6.0",
+ "solana-vote-program 1.6.0",
+ "thiserror",
+]
+
+[[package]]
+name = "solana-stake-program"
+version = "1.6.0"
+source = "git+https://github.com/forbole/solana?branch=wasm#833aeff1b7eafb9494b9ad87e54665fd21af7f02"
+dependencies = [
+ "bincode",
+ "log 0.4.11",
+ "num-derive",
+ "num-traits",
+ "rustc_version",
+ "serde",
+ "serde_derive",
+ "solana-config-program 1.6.0 (git+https://github.com/forbole/solana?branch=wasm)",
+ "solana-frozen-abi 1.6.0 (git+https://github.com/forbole/solana?branch=wasm)",
+ "solana-frozen-abi-macro 1.6.0 (git+https://github.com/forbole/solana?branch=wasm)",
+ "solana-sdk 1.6.0 (git+https://github.com/forbole/solana?branch=wasm)",
+ "solana-vote-program 1.6.0 (git+https://github.com/forbole/solana?branch=wasm)",
  "thiserror",
 ]
 
@@ -5347,7 +5461,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "smpl_jwt",
- "solana-sdk",
+ "solana-sdk 1.6.0",
  "solana-storage-proto",
  "solana-transaction-status",
  "thiserror",
@@ -5365,7 +5479,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "solana-account-decoder",
- "solana-sdk",
+ "solana-sdk 1.6.0",
  "solana-transaction-status",
 ]
 
@@ -5378,7 +5492,7 @@ dependencies = [
  "solana-logger 1.6.0",
  "solana-measure",
  "solana-runtime",
- "solana-sdk",
+ "solana-sdk 1.6.0",
  "solana-version",
 ]
 
@@ -5391,9 +5505,9 @@ dependencies = [
  "nix 0.19.0",
  "solana-logger 1.6.0",
  "solana-measure",
- "solana-metrics",
+ "solana-metrics 1.6.0",
  "solana-perf",
- "solana-sdk",
+ "solana-sdk 1.6.0",
  "thiserror",
 ]
 
@@ -5437,8 +5551,8 @@ dependencies = [
  "solana-program-test",
  "solana-remote-wallet",
  "solana-runtime",
- "solana-sdk",
- "solana-stake-program",
+ "solana-sdk 1.6.0",
+ "solana-stake-program 1.6.0",
  "solana-transaction-status",
  "solana-version",
  "spl-associated-token-account",
@@ -5461,9 +5575,9 @@ dependencies = [
  "serde_json",
  "solana-account-decoder",
  "solana-runtime",
- "solana-sdk",
- "solana-stake-program",
- "solana-vote-program",
+ "solana-sdk 1.6.0",
+ "solana-stake-program 1.6.0",
+ "solana-vote-program 1.6.0",
  "spl-memo 2.0.1",
  "spl-memo 3.0.0",
  "spl-token 3.0.1",
@@ -5475,7 +5589,7 @@ name = "solana-upload-perf"
 version = "1.6.0"
 dependencies = [
  "serde_json",
- "solana-metrics",
+ "solana-metrics 1.6.0",
 ]
 
 [[package]]
@@ -5506,13 +5620,13 @@ dependencies = [
  "solana-faucet",
  "solana-ledger",
  "solana-logger 1.6.0",
- "solana-metrics",
+ "solana-metrics 1.6.0",
  "solana-net-utils",
  "solana-perf",
  "solana-runtime",
- "solana-sdk",
+ "solana-sdk 1.6.0",
  "solana-version",
- "solana-vote-program",
+ "solana-vote-program 1.6.0",
  "symlink",
 ]
 
@@ -5527,7 +5641,7 @@ dependencies = [
  "solana-frozen-abi 1.6.0",
  "solana-frozen-abi-macro 1.6.0",
  "solana-logger 1.6.0",
- "solana-sdk",
+ "solana-sdk 1.6.0",
 ]
 
 [[package]]
@@ -5540,9 +5654,9 @@ dependencies = [
  "num-traits",
  "serde",
  "serde_derive",
- "solana-config-program",
+ "solana-config-program 1.6.0",
  "solana-runtime",
- "solana-sdk",
+ "solana-sdk 1.6.0",
  "thiserror",
 ]
 
@@ -5560,8 +5674,28 @@ dependencies = [
  "solana-frozen-abi 1.6.0",
  "solana-frozen-abi-macro 1.6.0",
  "solana-logger 1.6.0",
- "solana-metrics",
- "solana-sdk",
+ "solana-metrics 1.6.0",
+ "solana-sdk 1.6.0",
+ "thiserror",
+]
+
+[[package]]
+name = "solana-vote-program"
+version = "1.6.0"
+source = "git+https://github.com/forbole/solana?branch=wasm#833aeff1b7eafb9494b9ad87e54665fd21af7f02"
+dependencies = [
+ "bincode",
+ "log 0.4.11",
+ "num-derive",
+ "num-traits",
+ "rustc_version",
+ "serde",
+ "serde_derive",
+ "solana-frozen-abi 1.6.0 (git+https://github.com/forbole/solana?branch=wasm)",
+ "solana-frozen-abi-macro 1.6.0 (git+https://github.com/forbole/solana?branch=wasm)",
+ "solana-logger 1.6.0 (git+https://github.com/forbole/solana?branch=wasm)",
+ "solana-metrics 1.6.0 (git+https://github.com/forbole/solana?branch=wasm)",
+ "solana-sdk 1.6.0 (git+https://github.com/forbole/solana?branch=wasm)",
  "thiserror",
 ]
 
@@ -5575,9 +5709,9 @@ dependencies = [
  "hex-literal",
  "rand 0.7.3",
  "serde",
- "solana-program 1.6.0",
- "solana-sdk",
- "solana-stake-program",
+ "solana-program 1.6.0 (git+https://github.com/forbole/solana?branch=wasm)",
+ "solana-sdk 1.6.0 (git+https://github.com/forbole/solana?branch=wasm)",
+ "solana-stake-program 1.6.0 (git+https://github.com/forbole/solana?branch=wasm)",
  "spl-token 3.1.0",
  "tiny-bip39 0.8.0",
  "wasm-bindgen",
@@ -5596,9 +5730,9 @@ dependencies = [
  "solana-cli-output",
  "solana-client",
  "solana-logger 1.6.0",
- "solana-metrics",
+ "solana-metrics 1.6.0",
  "solana-notifier",
- "solana-sdk",
+ "solana-sdk 1.6.0",
  "solana-version",
 ]
 
