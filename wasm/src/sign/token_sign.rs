@@ -1,15 +1,19 @@
 use crate::{sign::serialize_encode_transaction, types::PubkeyAndEncodedTransaction};
-use solana_program::{system_instruction};
+use solana_program::{program_pack::Pack, system_instruction};
 use solana_sdk::{
-    pubkey::Pubkey,
     hash::Hash,
     message::Message,
-    signature::{keypair_from_seed_phrase_and_passphrase, Signer},
+    signature::{keypair_from_seed_phrase_and_passphrase, Keypair, Signer},
     transaction::Transaction,
 };
-use spl_token::{instruction as spl_token_instruction};
+use spl_token::{instruction as spl_token_instruction, state::Mint};
 use std::str::FromStr;
 use wasm_bindgen::prelude::*;
+
+#[wasm_bindgen(js_name = "getTokenLength")]
+pub fn get_token_size() -> usize {
+    Mint::LEN
+}
 
 #[wasm_bindgen(js_name = "createToken")]
 pub fn create_token(
@@ -22,8 +26,8 @@ pub fn create_token(
 ) -> Result<JsValue, JsValue> {
     let from_keypair = keypair_from_seed_phrase_and_passphrase(phrase, passphrase).unwrap();
     let from_pubkey = from_keypair.pubkey();
-    let token = Pubkey::new_unique();
-
+    let token_keypair = Keypair::new();
+    let token_pubkey = token_keypair.pubkey();
     let freeze_authority_pubkey = if enable_freeze {
         Some(from_pubkey)
     } else {
@@ -33,14 +37,14 @@ pub fn create_token(
     let instructions = vec![
         system_instruction::create_account(
             &from_pubkey,
-            &token,
+            &token_pubkey,
             minimum_balance_for_rent_exemption as u64,
-            82 as u64,
+            Mint::LEN as u64,
             &spl_token::id(),
         ),
         spl_token_instruction::initialize_mint(
             &spl_token::id(),
-            &token,
+            &token_pubkey,
             &from_pubkey,
             freeze_authority_pubkey.as_ref(),
             decimals,
@@ -48,12 +52,12 @@ pub fn create_token(
         .unwrap(),
     ];
     let recent_hash = Hash::from_str(blockhash).unwrap();
-    let signers = [&from_keypair];
+    let signers = [&from_keypair, &from_keypair, &token_keypair];
     let message = Message::new(&instructions, Some(&from_keypair.pubkey()));
     let tx = Transaction::new(&signers, message, recent_hash);
 
     let result = PubkeyAndEncodedTransaction {
-        pubkey: token.to_string(),
+        pubkey: token_pubkey.to_string(),
         encoded: serialize_encode_transaction(&tx),
     };
     Ok(JsValue::from_serde(&result).unwrap())
