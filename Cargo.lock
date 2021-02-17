@@ -3095,7 +3095,7 @@ checksum = "0ef9e7e66b4468674bfcb0c81af8b7fa0bb154fa9f28eb840da5c447baeb8d7e"
 dependencies = [
  "libc",
  "rand_chacha 0.3.0",
- "rand_core 0.6.1",
+ "rand_core 0.6.2",
  "rand_hc 0.3.0",
 ]
 
@@ -3126,7 +3126,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e12735cf05c9e10bf21534da50a147b924d555dc7a547c42e6bb2d5b6017ae0d"
 dependencies = [
  "ppv-lite86",
- "rand_core 0.6.1",
+ "rand_core 0.6.2",
 ]
 
 [[package]]
@@ -3155,9 +3155,9 @@ dependencies = [
 
 [[package]]
 name = "rand_core"
-version = "0.6.1"
+version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c026d7df8b298d90ccbbc5190bd04d85e159eaf5576caeacf8741da93ccbd2e5"
+checksum = "34cf66eb183df1c5876e2dcf6b13d57340741e8dc255b48e40a26de954d06ae7"
 dependencies = [
  "getrandom 0.2.0",
 ]
@@ -3186,7 +3186,7 @@ version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3190ef7066a446f2e7f42e239d161e905420ccab01eb967c9eb27d21b2322a73"
 dependencies = [
- "rand_core 0.6.1",
+ "rand_core 0.6.2",
 ]
 
 [[package]]
@@ -4096,6 +4096,7 @@ dependencies = [
  "num-derive",
  "num-traits",
  "rand 0.7.3",
+ "rand_core 0.6.2",
  "rustversion",
  "solana-runtime",
  "solana-sdk",
@@ -4269,6 +4270,7 @@ dependencies = [
  "bincode",
  "chrono",
  "log 0.4.11",
+ "rand_core 0.6.2",
  "serde",
  "serde_derive",
  "solana-logger 1.6.0",
@@ -4308,6 +4310,7 @@ dependencies = [
  "num_cpus",
  "rand 0.7.3",
  "rand_chacha 0.2.2",
+ "rand_core 0.6.2",
  "raptorq",
  "rayon",
  "regex",
@@ -5119,6 +5122,7 @@ dependencies = [
  "pbkdf2 0.6.0",
  "rand 0.7.3",
  "rand_chacha 0.2.2",
+ "rand_core 0.6.2",
  "rustc_version",
  "rustversion",
  "serde",
@@ -5266,6 +5270,7 @@ dependencies = [
  "log 0.4.11",
  "prost",
  "prost-types",
+ "rand_core 0.6.2",
  "serde",
  "serde_derive",
  "smpl_jwt",
@@ -5525,9 +5530,9 @@ dependencies = [
 
 [[package]]
 name = "solana_rbpf"
-version = "0.2.4"
+version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cef52e1b7993b49ea5c2f65b1363bdc6f38046e467585d08094f54bf55db5ccc"
+checksum = "6e3089d0175f975358b602072a02bd327a154399d2b54a8cf0f8f21108a4de4c"
 dependencies = [
  "byteorder",
  "combine",

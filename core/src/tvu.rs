@@ -80,6 +80,9 @@ pub struct TvuConfig {
     pub accounts_hash_fault_injection_slots: u64,
     pub accounts_db_caching_enabled: bool,
     pub test_hash_calculation: bool,
+    pub use_index_hash_calculation: bool,
+    pub rocksdb_compaction_interval: Option<u64>,
+    pub rocksdb_max_compaction_jitter: Option<u64>,
 }
 
 impl Tvu {
@@ -151,6 +154,8 @@ impl Tvu {
 
         let cluster_slots = Arc::new(ClusterSlots::default());
         let (duplicate_slots_reset_sender, duplicate_slots_reset_receiver) = unbounded();
+        let compaction_interval = tvu_config.rocksdb_compaction_interval;
+        let max_compaction_jitter = tvu_config.rocksdb_max_compaction_jitter;
         let retransmit_stage = RetransmitStage::new(
             bank_forks.clone(),
             leader_schedule_cache,
@@ -267,6 +272,8 @@ impl Tvu {
                 blockstore.clone(),
                 max_ledger_shreds,
                 &exit,
+                compaction_interval,
+                max_compaction_jitter,
             )
         });
 
@@ -276,6 +283,7 @@ impl Tvu {
             accounts_background_request_handler,
             tvu_config.accounts_db_caching_enabled,
             tvu_config.test_hash_calculation,
+            tvu_config.use_index_hash_calculation,
         );
 
         Tvu {
