@@ -82,7 +82,7 @@ mod test {
         let phrase =
             "plunge bitter method anchor slogan talent draft obscure mimic hover ordinary tiny";
         let passphrase = "";
-        create_stake_account(hash, phrase, passphrase, 100);
+        create_stake_account(hash, phrase, passphrase, 100).unwrap();
     }
 
     #[wasm_bindgen_test]
@@ -93,6 +93,6 @@ mod test {
         let passphrase = "";
         let stake_account = Pubkey::new_unique().to_string();
         let validator = Pubkey::new_unique().to_string();
-        delegate_stake(hash, phrase, passphrase, &stake_account, &validator);
+        delegate_stake(hash, phrase, passphrase, &stake_account, &validator).unwrap();
     }
 }

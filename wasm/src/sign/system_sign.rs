@@ -31,3 +31,18 @@ pub fn transfer(
 }
 
 
+#[cfg(test)]
+mod test {
+    use super::*;
+    use wasm_bindgen_test::*;
+
+    #[wasm_bindgen_test]
+    fn test_transfer(){
+        let hash = "3r1DbHt5RtsQfdDMyLaeBkoQqMcn3m4S4kDLFj4YHvae";
+        let phrase =
+            "plunge bitter method anchor slogan talent draft obscure mimic hover ordinary tiny";
+        let passphrase = "";
+        let to = "FPYSXfvJ24mCk9f8bX8zgtWYKnvgf96upeSaNraEtuk9";
+        transfer(hash, phrase, passphrase, to, 100).unwrap();
+    }
+}
