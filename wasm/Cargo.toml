@@ -8,9 +8,9 @@ edition = "2018"
 crate-type = ["cdylib", "lib"]
 
 [dependencies]
-solana-sdk = { path = "../sdk", version = "1.6.0", default-features = false, features = ["wasm-bindgen"] }
-solana-program = { path = "../sdk/program" }
-solana-stake-program = { path = "../programs/stake" }
+solana-sdk = { git = "https://github.com/forbole/solana", default-features = false, features = ["wasm-bindgen"], branch = "wasm" }
+solana-program = { git = "https://github.com/forbole/solana", branch = "wasm" }
+solana-stake-program = { git = "https://github.com/forbole/solana", branch = "wasm" }
 tiny-bip39 = "0.8.0"
 wasm-bindgen = { version = "0.2.65", features = ["serde-serialize"]}
 wasm-bindgen-test = "0.3.20"
