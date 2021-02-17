@@ -3969,7 +3969,7 @@ dependencies = [
  "solana-sdk",
  "solana-stake-program",
  "solana-vote-program",
- "spl-token",
+ "spl-token 3.0.1",
  "thiserror",
  "zstd",
 ]
@@ -4387,7 +4387,7 @@ dependencies = [
  "solana-transaction-status",
  "solana-version",
  "solana-vote-program",
- "spl-token",
+ "spl-token 3.0.1",
  "systemstat",
  "tempfile",
  "thiserror",
@@ -4536,6 +4536,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-frozen-abi"
+version = "1.6.0"
+source = "git+https://github.com/forbole/solana?branch=wasm#3b4de8cbf6401fa4d9a7e415bb3bf4c2b9321b1f"
+dependencies = [
+ "bs58 0.3.1",
+ "bv",
+ "generic-array 0.14.3",
+ "log 0.4.11",
+ "memmap2",
+ "rustc_version",
+ "serde",
+ "serde_derive",
+ "sha2 0.9.3",
+ "solana-frozen-abi-macro 1.6.0 (git+https://github.com/forbole/solana?branch=wasm)",
+ "solana-logger 1.6.0 (git+https://github.com/forbole/solana?branch=wasm)",
+ "thiserror",
+]
+
+[[package]]
 name = "solana-frozen-abi-macro"
 version = "1.5.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4551,6 +4570,18 @@ dependencies = [
 [[package]]
 name = "solana-frozen-abi-macro"
 version = "1.6.0"
+dependencies = [
+ "lazy_static",
+ "proc-macro2 1.0.24",
+ "quote 1.0.6",
+ "rustc_version",
+ "syn 1.0.60",
+]
+
+[[package]]
+name = "solana-frozen-abi-macro"
+version = "1.6.0"
+source = "git+https://github.com/forbole/solana?branch=wasm#3b4de8cbf6401fa4d9a7e415bb3bf4c2b9321b1f"
 dependencies = [
  "lazy_static",
  "proc-macro2 1.0.24",
@@ -4800,6 +4831,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-logger"
+version = "1.6.0"
+source = "git+https://github.com/forbole/solana?branch=wasm#3b4de8cbf6401fa4d9a7e415bb3bf4c2b9321b1f"
+dependencies = [
+ "env_logger 0.8.2",
+ "lazy_static",
+ "log 0.4.11",
+]
+
+[[package]]
 name = "solana-measure"
 version = "1.6.0"
 dependencies = [
@@ -5008,6 +5049,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-program"
+version = "1.6.0"
+source = "git+https://github.com/forbole/solana?branch=wasm#3b4de8cbf6401fa4d9a7e415bb3bf4c2b9321b1f"
+dependencies = [
+ "bincode",
+ "bs58 0.3.1",
+ "bv",
+ "curve25519-dalek 2.1.0",
+ "hex",
+ "itertools",
+ "lazy_static",
+ "log 0.4.11",
+ "num-derive",
+ "num-traits",
+ "rand 0.7.3",
+ "rustc_version",
+ "rustversion",
+ "serde",
+ "serde_bytes",
+ "serde_derive",
+ "sha2 0.9.3",
+ "solana-frozen-abi 1.6.0 (git+https://github.com/forbole/solana?branch=wasm)",
+ "solana-frozen-abi-macro 1.6.0 (git+https://github.com/forbole/solana?branch=wasm)",
+ "solana-logger 1.6.0 (git+https://github.com/forbole/solana?branch=wasm)",
+ "solana-sdk-macro 1.6.0 (git+https://github.com/forbole/solana?branch=wasm)",
+ "thiserror",
+]
+
+[[package]]
 name = "solana-program-test"
 version = "1.6.0"
 dependencies = [
@@ -5198,6 +5268,18 @@ dependencies = [
 [[package]]
 name = "solana-sdk-macro"
 version = "1.6.0"
+dependencies = [
+ "bs58 0.3.1",
+ "proc-macro2 1.0.24",
+ "quote 1.0.6",
+ "rustversion",
+ "syn 1.0.60",
+]
+
+[[package]]
+name = "solana-sdk-macro"
+version = "1.6.0"
+source = "git+https://github.com/forbole/solana?branch=wasm#3b4de8cbf6401fa4d9a7e415bb3bf4c2b9321b1f"
 dependencies = [
  "bs58 0.3.1",
  "proc-macro2 1.0.24",
@@ -5411,7 +5493,7 @@ dependencies = [
  "solana-transaction-status",
  "solana-version",
  "spl-associated-token-account",
- "spl-token",
+ "spl-token 3.0.1",
  "tempfile",
  "thiserror",
 ]
@@ -5435,7 +5517,7 @@ dependencies = [
  "solana-vote-program",
  "spl-memo 2.0.1",
  "spl-memo 3.0.0",
- "spl-token",
+ "spl-token 3.0.1",
  "thiserror",
 ]
 
@@ -5547,6 +5629,7 @@ dependencies = [
  "solana-program 1.6.0",
  "solana-sdk",
  "solana-stake-program",
+ "spl-token 3.1.0",
  "tiny-bip39 0.8.0",
  "wasm-bindgen",
  "wasm-bindgen-test",
@@ -5601,7 +5684,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4adc47eebe5d2b662cbaaba1843719c28a67e5ec5d0460bc3ca60900a51f74e2"
 dependencies = [
  "solana-program 1.5.5",
- "spl-token",
+ "spl-token 3.0.1",
 ]
 
 [[package]]
@@ -5633,6 +5716,19 @@ dependencies = [
  "num-traits",
  "num_enum",
  "solana-program 1.5.5",
+ "thiserror",
+]
+
+[[package]]
+name = "spl-token"
+version = "3.1.0"
+source = "git+https://github.com/forbole/solana-program-library?branch=wasm#1dd5b564709fb90ea104036a9736837cc543fb3b"
+dependencies = [
+ "arrayref",
+ "num-derive",
+ "num-traits",
+ "num_enum",
+ "solana-program 1.6.0 (git+https://github.com/forbole/solana?branch=wasm)",
  "thiserror",
 ]
 
