@@ -24,5 +24,10 @@ spl-token = { git = "https://github.com/forbole/solana-program-library", branch 
 [dev-dependencies]
 hex-literal = "0.3.1"
 
+[profile.release]
+lto = true
+opt-level = "s"
+
 [package.metadata.wasm-pack.profile.release]
 wasm-opt = true
+
