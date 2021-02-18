@@ -6,9 +6,11 @@ pub mod vote_instruction;
 pub mod vote_state;
 pub mod vote_transaction;
 
+#[cfg(not(target_arch = "wasm32"))]
 #[macro_use]
 extern crate solana_metrics;
 
+#[cfg(not(target_arch = "wasm32"))]
 #[macro_use]
 extern crate solana_frozen_abi_macro;
 

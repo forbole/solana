@@ -37,8 +37,9 @@ impl From<u64> for PubkeyError {
 
 #[repr(transparent)]
 #[derive(
-    Serialize, Deserialize, Clone, Copy, Default, Eq, PartialEq, Ord, PartialOrd, Hash, AbiExample,
+    Serialize, Deserialize, Clone, Copy, Default, Eq, PartialEq, Ord, PartialOrd, Hash
 )]
+#[cfg_attr(not(target_arch = "wasm32"),  derive(AbiExample))]
 pub struct Pubkey([u8; 32]);
 
 impl crate::sanitize::Sanitize for Pubkey {}
@@ -299,7 +300,7 @@ impl Pubkey {
             unsafe { sol_log_pubkey(self.as_ref() as *const _ as *const u8) };
         }
 
-        #[cfg(not(target_arch = "bpf"))]
+        #[cfg(not(any(target_arch = "bpf", target_arch = "wasm32")))]
         crate::program_stubs::sol_log(&self.to_string());
     }
 }

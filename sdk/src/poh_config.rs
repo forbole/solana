@@ -1,7 +1,8 @@
 use crate::clock::DEFAULT_TICKS_PER_SECOND;
 use std::time::Duration;
 
-#[derive(Serialize, Deserialize, Clone, Debug, AbiExample)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(AbiExample))]
 pub struct PohConfig {
     /// The target tick rate of the cluster.
     pub target_tick_duration: Duration,

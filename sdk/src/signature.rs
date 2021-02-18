@@ -1,5 +1,5 @@
 //! The `signature` module provides functionality for public, and private keys.
-#![cfg(feature = "full")]
+#![cfg(any(feature = "full", feature = "wasm-bindgen"))]
 
 use crate::{pubkey::Pubkey, transaction::TransactionError};
 use ed25519_dalek::Signer as DalekSigner;
@@ -65,8 +65,9 @@ const MAX_BASE58_SIGNATURE_LEN: usize = 88;
 
 #[repr(transparent)]
 #[derive(
-    Serialize, Deserialize, Clone, Copy, Default, Eq, PartialEq, Ord, PartialOrd, Hash, AbiExample,
+    Serialize, Deserialize, Clone, Copy, Default, Eq, PartialEq, Ord, PartialOrd, Hash,
 )]
+#[cfg_attr(not(target_arch = "wasm32"), derive(AbiExample))]
 pub struct Signature(GenericArray<u8, U64>);
 
 impl crate::sanitize::Sanitize for Signature {}

@@ -7,6 +7,7 @@ repository = "https://github.com/solana-labs/solana"
 homepage = "https://solana.com/"
 license = "Apache-2.0"
 edition = "2018"
+resolver = "2"
 
 [features]
 # "program" feature is a legacy feature retained to support v1.3 and older
@@ -31,7 +32,22 @@ full = [
     "solana-crate-features",
     "libsecp256k1",
     "sha3",
-    "digest",
+    "digest"
+]
+
+wasm-bindgen = [
+  "assert_matches",
+  "byteorder",
+  "chrono",
+  "generic-array",
+  "rand",
+  "rand_chacha",
+  "serde_json",
+  "ed25519-dalek",
+  "solana-logger",
+  "libsecp256k1",
+  "sha3",
+  "digest"
 ]
 
 [dependencies]
@@ -64,14 +80,16 @@ thiserror = "1.0"
 ed25519-dalek = { version = "=1.0.0-pre.4", optional = true }
 solana-crate-features = { path = "../crate-features", version = "1.6.0", optional = true }
 solana-logger = { path = "../logger", version = "1.6.0", optional = true }
-solana-frozen-abi = { path = "../frozen-abi", version = "1.6.0" }
-solana-frozen-abi-macro = { path = "../frozen-abi/macro", version = "1.6.0" }
 solana-program = { path = "program", version = "1.6.0" }
 solana-sdk-macro = { path = "macro", version = "1.6.0" }
 rustversion = "1.0.4"
 libsecp256k1 = { version = "0.3.5", optional = true }
 sha3 = { version = "0.9.1", optional = true }
 digest = { version = "0.9.0", optional = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+solana-frozen-abi = { path = "../frozen-abi", version = "1.6.0" }
+solana-frozen-abi-macro = { path = "../frozen-abi/macro", version = "1.6.0" }
 
 [dev-dependencies]
 curve25519-dalek = "2.1.0"

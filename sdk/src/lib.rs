@@ -86,5 +86,6 @@ extern crate serde_derive;
 pub extern crate bs58;
 extern crate log as logger;
 
+#[cfg(not(target_arch = "wasm32"))]
 #[macro_use]
 extern crate solana_frozen_abi_macro;

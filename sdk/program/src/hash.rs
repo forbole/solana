@@ -9,8 +9,9 @@ pub const HASH_BYTES: usize = 32;
 /// Maximum string length of a base58 encoded hash
 const MAX_BASE58_LEN: usize = 44;
 #[derive(
-    Serialize, Deserialize, Clone, Copy, Default, Eq, PartialEq, Ord, PartialOrd, Hash, AbiExample,
+    Serialize, Deserialize, Clone, Copy, Default, Eq, PartialEq, Ord, PartialOrd, Hash
 )]
+#[cfg_attr(not(target_arch = "wasm32"), derive(AbiExample))]
 #[repr(transparent)]
 pub struct Hash(pub [u8; HASH_BYTES]);
 

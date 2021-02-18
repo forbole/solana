@@ -4,8 +4,12 @@ use std::{cell::RefCell, cmp, fmt, rc::Rc};
 
 /// An Account with data that is stored on chain
 #[repr(C)]
-#[frozen_abi(digest = "AXJTWWXfp49rHb34ayFzFLSEuaRbMUsVPNzBDyP3UPjc")]
-#[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Default, AbiExample)]
+#[cfg_attr(
+    not(target_arch = "wasm32"),
+    frozen_abi(digest = "AXJTWWXfp49rHb34ayFzFLSEuaRbMUsVPNzBDyP3UPjc"),
+    derive(AbiExample)
+)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Account {
     /// lamports in the account

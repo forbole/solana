@@ -8,7 +8,10 @@ use crate::{
 use log::*;
 use num_derive::{FromPrimitive, ToPrimitive};
 use serde_derive::{Deserialize, Serialize};
+
+#[cfg(not(target_arch = "wasm32"))]
 use solana_metrics::inc_new_counter_info;
+
 use solana_sdk::{
     decode_error::DecodeError,
     hash::Hash,
@@ -314,6 +317,7 @@ pub fn process_instruction(
             vote_state::update_commission(me, commission, &signers)
         }
         VoteInstruction::Vote(vote) | VoteInstruction::VoteSwitch(vote, _) => {
+            #[cfg(not(target_arch = "wasm32"))]
             inc_new_counter_info!("vote-native", 1);
             vote_state::process_vote(
                 me,

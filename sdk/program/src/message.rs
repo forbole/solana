@@ -141,8 +141,12 @@ fn get_program_ids(instructions: &[Instruction]) -> Vec<Pubkey> {
         .collect()
 }
 
-#[frozen_abi(digest = "BVC5RhetsNpheGipt5rUrkR6RDDUHtD5sCLK1UjymL4S")]
-#[derive(Serialize, Deserialize, Default, Debug, PartialEq, Eq, Clone, AbiExample)]
+#[cfg_attr(
+    not(target_arch = "wasm32"),
+    frozen_abi(digest = "BVC5RhetsNpheGipt5rUrkR6RDDUHtD5sCLK1UjymL4S"),
+    derive(AbiExample)
+)]
+#[derive(Serialize, Deserialize, Default, Debug, PartialEq, Eq, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct MessageHeader {
     /// The number of signatures required for this message to be considered valid. The
@@ -160,8 +164,12 @@ pub struct MessageHeader {
     pub num_readonly_unsigned_accounts: u8,
 }
 
-#[frozen_abi(digest = "BPBJZxpRQ4JS7LGJtsgoyctg4BXyBbbY4uc7FjowtxLV")]
-#[derive(Serialize, Deserialize, Default, Debug, PartialEq, Eq, Clone, AbiExample)]
+#[cfg_attr(
+    not(target_arch = "wasm32"),
+    frozen_abi(digest = "BPBJZxpRQ4JS7LGJtsgoyctg4BXyBbbY4uc7FjowtxLV"),
+    derive(AbiExample)
+)]
+#[derive(Serialize, Deserialize, Default, Debug, PartialEq, Eq, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Message {
     /// The message header, identifying signed and read-only `account_keys`

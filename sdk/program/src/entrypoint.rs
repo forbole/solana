@@ -28,9 +28,15 @@ pub type ProcessInstruction =
 pub const SUCCESS: u64 = 0;
 
 /// Start address of the memory region used for program heap.
+#[cfg(not(target_arch = "wasm32"))]
 pub const HEAP_START_ADDRESS: usize = 0x300000000;
+#[cfg(target_arch = "wasm32")]
+pub const HEAP_START_ADDRESS: u64 = 0x300000000;
 /// Length of the heap memory region used for program heap.
+#[cfg(not(target_arch = "wasm32"))]
 pub const HEAP_LENGTH: usize = 32 * 1024;
+#[cfg(target_arch = "wasm32")]
+pub const HEAP_LENGTH: u64 = 32 * 1024;
 
 /// Declare the entry point of the program and use the default local heap
 /// implementation

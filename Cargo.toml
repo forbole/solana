@@ -71,8 +71,10 @@ members = [
     "cli",
     "rayon-threadlimit",
     "watchtower",
+    "wasm"
 ]
 
 exclude = [
     "programs/bpf",
 ]
+resolver = "2"

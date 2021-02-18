@@ -1,0 +1,28 @@
+[package]
+name = "solana-wasm"
+version = "0.1.0"
+authors = ["Paul <p22626262@gmail.com>"]
+edition = "2018"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+
+[dependencies]
+solana-sdk = { git = "https://github.com/forbole/solana", default-features = false, features = ["wasm-bindgen"], branch = "wasm" }
+solana-program = { git = "https://github.com/forbole/solana", branch = "wasm" }
+solana-stake-program = { git = "https://github.com/forbole/solana", branch = "wasm" }
+tiny-bip39 = "0.8.0"
+wasm-bindgen = { version = "0.2.65", features = ["serde-serialize"]}
+wasm-bindgen-test = "0.3.20"
+serde = { version = "1.0", features = ["derive"] }
+bincode = "1.3.1"
+bs58 = "0.4.0"
+base64 = "0.13.0"
+rand = { version = "0.7.3", features = ["wasm-bindgen"] }
+spl-token = { git = "https://github.com/forbole/solana-program-library", branch = "wasm" }
+
+[dev-dependencies]
+hex-literal = "0.3.1"
+
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = true

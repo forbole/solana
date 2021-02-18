@@ -1,4 +1,4 @@
-#![cfg(feature = "full")]
+#![cfg(any(feature = "full", feature = "wasm-bindgen"))]
 
 use crate::instruction::Instruction;
 use digest::Digest;
