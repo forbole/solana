@@ -1,5 +1,5 @@
 //! The `signature` module provides functionality for public, and private keys.
-#![cfg(any(feature = "full", feature = "wasm-bindgen"))]
+#![cfg(any(feature = "full", target_arch = "wasm32"))]
 
 use crate::{pubkey::Pubkey, transaction::TransactionError};
 use ed25519_dalek::Signer as DalekSigner;

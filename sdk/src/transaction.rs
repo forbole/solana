@@ -1,5 +1,5 @@
 //! Defines a Transaction type to package an atomic sequence of instructions.
-#![cfg(any(feature = "full", feature = "wasm-bindgen"))]
+#![cfg(any(feature = "full", target_arch = "wasm32"))]
 
 use crate::sanitize::{Sanitize, SanitizeError};
 use crate::secp256k1_instruction::verify_eth_addresses;
