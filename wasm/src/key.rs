@@ -1,4 +1,4 @@
-use crate::types::PubKeyAndPhrase;
+use crate::types::PubkeyAndPhrase;
 use solana_sdk::signature::{Signer, keypair_from_seed_phrase_and_passphrase};
 use bip39::{Language, Mnemonic, MnemonicType};
 use wasm_bindgen::prelude::*;
@@ -10,7 +10,7 @@ pub fn generate_key(passphrase: &str) -> Result<JsValue, JsValue> {
     let language = Language::English;
     let phrase = Mnemonic::new(mnemonic_type, language).into_phrase();
     let keypair = keypair_from_seed_phrase_and_passphrase(&phrase, passphrase).unwrap();
-    let pubkey_and_passphrase = PubKeyAndPhrase{
+    let pubkey_and_passphrase = PubkeyAndPhrase{
         pubkey: keypair.pubkey().to_string(),
         phrase: phrase
     };
