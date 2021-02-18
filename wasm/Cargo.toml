@@ -20,13 +20,16 @@ bs58 = "0.4.0"
 base64 = "0.13.0"
 rand = { version = "0.7.3", features = ["wasm-bindgen"] }
 spl-token = { git = "https://github.com/forbole/solana-program-library", branch = "wasm" }
+wee_alloc = "0.4.5"
 
 [dev-dependencies]
 hex-literal = "0.3.1"
 
 [profile.release]
+panic = "abort"
+codegen-units = 1
+opt-level = "z"
 lto = true
-opt-level = "s"
 
 [package.metadata.wasm-pack.profile.release]
 wasm-opt = true
