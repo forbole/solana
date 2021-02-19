@@ -17,23 +17,23 @@ pub fn create_stake_account(
     passphrase: &str,
     lamports: u32,
 ) -> Result<JsValue, JsValue> {
-    let from_keypair = keypair_from_seed_phrase_and_passphrase(phrase, passphrase).unwrap();
-    let from_pubkey = from_keypair.pubkey();
+    let authority_keypair = keypair_from_seed_phrase_and_passphrase(phrase, passphrase).unwrap();
+    let authority_pubkey = authority_keypair.pubkey();
     let stake_keypair = Keypair::new();
     let authorized = Authorized {
-        staker: from_pubkey,
-        withdrawer: from_pubkey,
+        staker: authority_pubkey,
+        withdrawer: authority_pubkey,
     };
     let lockup = Lockup::default();
     let instructions = stake_instruction::create_account(
-        &from_pubkey,
+        &authority_pubkey,
         &stake_keypair.pubkey(),
         &authorized,
         &lockup,
         lamports as u64,
     );
-    let signers = [&from_keypair, &from_keypair, &stake_keypair];
-    let encoded = generate_encoded_transaction(blockhash, &instructions, &from_pubkey, &signers);
+    let signers = [&authority_keypair, &authority_keypair, &stake_keypair];
+    let encoded = generate_encoded_transaction(blockhash, &instructions, &authority_pubkey, &signers);
     let result = PubkeyAndEncodedTransaction {
         pubkey: stake_keypair.pubkey().to_string(),
         encoded: encoded,
@@ -49,14 +49,14 @@ pub fn delegate_stake(
     stake_account: &str,
     validator: &str,
 ) -> Result<String, JsValue> {
-    let from_keypair = keypair_from_seed_phrase_and_passphrase(phrase, passphrase).unwrap();
-    let from_pubkey = from_keypair.pubkey();
+    let authority_keypair = keypair_from_seed_phrase_and_passphrase(phrase, passphrase).unwrap();
+    let authority_pubkey = authority_keypair.pubkey();
     let stake_pubkey = Pubkey::from_str(stake_account).unwrap();
     let validator_pubkey = Pubkey::from_str(validator).unwrap();
     let instruction =
-        stake_instruction::delegate_stake(&stake_pubkey, &from_pubkey, &validator_pubkey);
-    let signers = [&from_keypair];
-    let encoded = generate_encoded_transaction(blockhash, &[instruction], &from_pubkey, &signers);
+        stake_instruction::delegate_stake(&stake_pubkey, &authority_pubkey, &validator_pubkey);
+    let signers = [&authority_keypair];
+    let encoded = generate_encoded_transaction(blockhash, &[instruction], &authority_pubkey, &signers);
     Ok(encoded)
 }
 
@@ -67,12 +67,12 @@ pub fn deactivate_stake(
     passphrase: &str,
     stake_account: &str,
 ) -> Result<String, JsValue> {
-    let from_keypair = keypair_from_seed_phrase_and_passphrase(phrase, passphrase).unwrap();
-    let from_pubkey = from_keypair.pubkey();
+    let authority_keypair = keypair_from_seed_phrase_and_passphrase(phrase, passphrase).unwrap();
+    let authority_pubkey = authority_keypair.pubkey();
     let stake_pubkey = Pubkey::from_str(stake_account).unwrap();
-    let instruction = stake_instruction::deactivate_stake(&stake_pubkey, &from_pubkey);
-    let signers = [&from_keypair];
-    let encoded = generate_encoded_transaction(blockhash, &[instruction], &from_pubkey, &signers);
+    let instruction = stake_instruction::deactivate_stake(&stake_pubkey, &authority_pubkey);
+    let signers = [&authority_keypair];
+    let encoded = generate_encoded_transaction(blockhash, &[instruction], &authority_pubkey, &signers);
     Ok(encoded)
 }
 
@@ -84,18 +84,18 @@ pub fn withdraw_stake(
     stake_account: &str,
     lamports: u64,
 ) -> Result<String, JsValue> {
-    let from_keypair = keypair_from_seed_phrase_and_passphrase(phrase, passphrase).unwrap();
-    let from_pubkey = from_keypair.pubkey();
+    let authority_keypair = keypair_from_seed_phrase_and_passphrase(phrase, passphrase).unwrap();
+    let authority_pubkey = authority_keypair.pubkey();
     let stake_pubkey = Pubkey::from_str(stake_account).unwrap();
     let instruction = stake_instruction::withdraw(
         &stake_pubkey,
-        &from_pubkey,
-        &from_pubkey,
+        &authority_pubkey,
+        &authority_pubkey,
         lamports as u64,
         None,
     );
-    let signers = [&from_keypair, &from_keypair];
-    let encoded = generate_encoded_transaction(blockhash, &[instruction], &from_pubkey, &signers);
+    let signers = [&authority_keypair, &authority_keypair];
+    let encoded = generate_encoded_transaction(blockhash, &[instruction], &authority_pubkey, &signers);
     Ok(encoded)
 }
 

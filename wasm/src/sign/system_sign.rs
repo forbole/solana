@@ -15,14 +15,14 @@ pub fn transfer(
     to: &str,
     lamports: u32,
 ) -> Result<String, JsValue> {
-    let from_keypair = keypair_from_seed_phrase_and_passphrase(phrase, passphrase).unwrap();
-    let from_pubkey = from_keypair.pubkey();
+    let authority_keypair = keypair_from_seed_phrase_and_passphrase(phrase, passphrase).unwrap();
+    let authority_pubkey = authority_keypair.pubkey();
     let to_pubkey = Pubkey::from_str(to).unwrap();
 
-    let instruction = system_instruction::transfer(&from_pubkey, &to_pubkey, lamports as u64);
-    let signers = [&from_keypair];
+    let instruction = system_instruction::transfer(&authority_pubkey, &to_pubkey, lamports as u64);
+    let signers = [&authority_keypair];
     let encoded_tx =
-        generate_encoded_transaction(blockhash, &[instruction], &from_pubkey, &signers);
+        generate_encoded_transaction(blockhash, &[instruction], &authority_pubkey, &signers);
     Ok(encoded_tx)
 }
 

@@ -13,11 +13,11 @@ pub mod token_sign;
 fn generate_encoded_transaction<T: Signers>(
     blockhash: &str,
     instructions: &[Instruction],
-    from_pubkey: &Pubkey,
+    authority_pubkey: &Pubkey,
     signers: &T,
 ) -> String {
     let recent_hash = Hash::from_str(blockhash).unwrap();
-    let message = Message::new(instructions, Some(from_pubkey));
+    let message = Message::new(instructions, Some(authority_pubkey));
     let tx = Transaction::new(signers, message, recent_hash);
     serialize_encode_transaction(&tx)
 }
