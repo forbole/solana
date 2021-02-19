@@ -1,7 +1,7 @@
 #![cfg_attr(RUSTC_WITH_SPECIALIZATION, feature(specialization))]
+#![allow(clippy::integer_arithmetic)]
 
 #[cfg(not(target_arch = "wasm32"))]
-#![allow(clippy::integer_arithmetic)]
 use solana_sdk::genesis_config::GenesisConfig;
 
 pub mod config;
