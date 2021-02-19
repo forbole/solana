@@ -37,14 +37,11 @@ full = [
 
 wasm-bindgen = [
   "assert_matches",
-  "byteorder",
-  "chrono",
   "generic-array",
   "rand",
   "rand_chacha",
   "serde_json",
   "ed25519-dalek",
-  "solana-logger",
   "libsecp256k1",
   "sha3",
   "digest"
