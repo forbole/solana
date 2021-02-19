@@ -1,10 +1,7 @@
-use crate::{sign::serialize_encode_transaction, types::PubkeyAndEncodedTransaction};
+use crate::{sign::generate_encoded_transaction, types::PubkeyAndEncodedTransaction};
 use solana_program::{program_pack::Pack, system_instruction};
 use solana_sdk::{
-    hash::Hash,
-    message::Message,
-    signature::{keypair_from_seed_phrase_and_passphrase, Keypair, Signer},
-    transaction::Transaction,
+    signature::{keypair_from_seed_phrase_and_passphrase, Keypair, Signer}
 };
 use spl_token::{instruction as spl_token_instruction, state::Mint};
 use std::str::FromStr;
@@ -51,14 +48,12 @@ pub fn create_token(
         )
         .unwrap(),
     ];
-    let recent_hash = Hash::from_str(blockhash).unwrap();
+  
     let signers = [&from_keypair, &from_keypair, &token_keypair];
-    let message = Message::new(&instructions, Some(&from_keypair.pubkey()));
-    let tx = Transaction::new(&signers, message, recent_hash);
-
+    let encoded = generate_encoded_transaction(blockhash, &instructions, &from_pubkey, &signers);
     let result = PubkeyAndEncodedTransaction {
         pubkey: token_pubkey.to_string(),
-        encoded: serialize_encode_transaction(&tx),
+        encoded: encoded,
     };
     Ok(JsValue::from_serde(&result).unwrap())
 }

@@ -1,12 +1,9 @@
-use crate::sign::{serialize_encode_transaction};
-use solana_sdk::{
-    hash::Hash,
-    signature::{Signer, keypair_from_seed_phrase_and_passphrase},
-    pubkey::Pubkey,
-    message::Message,
-    transaction::Transaction,
-};
+use crate::sign::generate_encoded_transaction;
 use solana_program::system_instruction;
+use solana_sdk::{
+    pubkey::Pubkey,
+    signature::{keypair_from_seed_phrase_and_passphrase, Signer},
+};
 use std::str::FromStr;
 use wasm_bindgen::prelude::*;
 
@@ -23,13 +20,11 @@ pub fn transfer(
     let to_pubkey = Pubkey::from_str(to).unwrap();
 
     let instruction = system_instruction::transfer(&from_pubkey, &to_pubkey, lamports as u64);
-    let recent_hash = Hash::from_str(blockhash).unwrap();
-    let message = Message::new(&[instruction], Some(&from_keypair.pubkey()));
     let signers = [&from_keypair];
-    let tx = Transaction::new(&signers, message, recent_hash);
-    Ok(serialize_encode_transaction(&tx))
+    let encoded_tx =
+        generate_encoded_transaction(blockhash, &[instruction], &from_pubkey, &signers);
+    Ok(encoded_tx)
 }
-
 
 #[cfg(test)]
 mod test {
@@ -37,7 +32,7 @@ mod test {
     use wasm_bindgen_test::*;
 
     #[wasm_bindgen_test]
-    fn test_transfer(){
+    fn test_transfer() {
         let hash = "3r1DbHt5RtsQfdDMyLaeBkoQqMcn3m4S4kDLFj4YHvae";
         let phrase =
             "plunge bitter method anchor slogan talent draft obscure mimic hover ordinary tiny";
