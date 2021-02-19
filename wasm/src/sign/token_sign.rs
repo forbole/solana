@@ -48,23 +48,11 @@ pub fn create_token(
         )
         .unwrap(),
     ];
-<<<<<<< HEAD
-  
     let signers = [&from_keypair, &from_keypair, &token_keypair];
     let encoded = generate_encoded_transaction(blockhash, &instructions, &from_pubkey, &signers);
     let result = PubkeyAndEncodedTransaction {
         pubkey: token_pubkey.to_string(),
         encoded: encoded,
-=======
-    let recent_hash = Hash::from_str(blockhash).unwrap();
-    let signers = [&from_keypair, &from_keypair, &token_keypair];
-    let message = Message::new(&instructions, Some(&from_keypair.pubkey()));
-    let tx = Transaction::new(&signers, message, recent_hash);
-
-    let result = PubkeyAndEncodedTransaction {
-        pubkey: token_pubkey.to_string(),
-        encoded: serialize_encode_transaction(&tx),
->>>>>>> 85d97fb849d19b9c069884b6161febe07f51a20a
     };
     Ok(JsValue::from_serde(&result).unwrap())
 }
