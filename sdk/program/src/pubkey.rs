@@ -1,4 +1,5 @@
 use crate::{decode_error::DecodeError, hash::hashv};
+use borsh::{BorshDeserialize, BorshSchema, BorshSerialize};
 use num_derive::{FromPrimitive, ToPrimitive};
 use std::{convert::TryFrom, fmt, mem, str::FromStr};
 use thiserror::Error;
@@ -37,7 +38,19 @@ impl From<u64> for PubkeyError {
 
 #[repr(transparent)]
 #[derive(
-    Serialize, Deserialize, Clone, Copy, Default, Eq, PartialEq, Ord, PartialOrd, Hash
+    Serialize,
+    Deserialize,
+    BorshSerialize,
+    BorshDeserialize,
+    BorshSchema,
+    Clone,
+    Copy,
+    Default,
+    Eq,
+    PartialEq,
+    Ord,
+    PartialOrd,
+    Hash,
 )]
 #[cfg_attr(not(target_arch = "wasm32"),  derive(AbiExample))]
 pub struct Pubkey([u8; 32]);

@@ -1,4 +1,5 @@
 //! The solana-program-test provides a BanksClient-based test framework BPF programs
+#![allow(clippy::integer_arithmetic)]
 
 use {
     async_trait::async_trait,
@@ -71,6 +72,8 @@ pub fn to_instruction_error(error: ProgramError) -> InstructionError {
         ProgramError::AccountBorrowFailed => InstructionError::AccountBorrowFailed,
         ProgramError::MaxSeedLengthExceeded => InstructionError::MaxSeedLengthExceeded,
         ProgramError::InvalidSeeds => InstructionError::InvalidSeeds,
+        ProgramError::IOError(err) => InstructionError::IOError(err),
+        ProgramError::AccountNotRentExempt => InstructionError::AccountNotRentExempt,
     }
 }
 
