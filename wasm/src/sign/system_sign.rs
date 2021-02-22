@@ -18,11 +18,14 @@ pub fn transfer(
     let authority_keypair = keypair_from_seed_phrase_and_passphrase(phrase, passphrase).unwrap();
     let authority_pubkey = authority_keypair.pubkey();
     let to_pubkey = Pubkey::from_str(to).unwrap();
-
-    let instruction = system_instruction::transfer(&authority_pubkey, &to_pubkey, lamports as u64);
+    let instructions = vec![system_instruction::transfer(
+        &authority_pubkey,
+        &to_pubkey,
+        lamports as u64,
+    )];
     let signers = [&authority_keypair];
     let encoded_tx =
-        generate_encoded_transaction(blockhash, &[instruction], &authority_pubkey, &signers);
+        generate_encoded_transaction(blockhash, &instructions, &authority_pubkey, &signers);
     Ok(encoded_tx)
 }
 

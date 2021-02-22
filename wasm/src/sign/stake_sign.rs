@@ -33,7 +33,8 @@ pub fn create_stake_account(
         lamports as u64,
     );
     let signers = [&authority_keypair, &stake_keypair];
-    let encoded = generate_encoded_transaction(blockhash, &instructions, &authority_pubkey, &signers);
+    let encoded =
+        generate_encoded_transaction(blockhash, &instructions, &authority_pubkey, &signers);
     let result = PubkeyAndEncodedTransaction {
         pubkey: stake_keypair.pubkey().to_string(),
         encoded: encoded,
@@ -53,10 +54,14 @@ pub fn delegate_stake(
     let authority_pubkey = authority_keypair.pubkey();
     let stake_pubkey = Pubkey::from_str(stake_account).unwrap();
     let validator_pubkey = Pubkey::from_str(validator).unwrap();
-    let instruction =
-        stake_instruction::delegate_stake(&stake_pubkey, &authority_pubkey, &validator_pubkey);
+    let instructions = vec![stake_instruction::delegate_stake(
+        &stake_pubkey,
+        &authority_pubkey,
+        &validator_pubkey,
+    )];
     let signers = [&authority_keypair];
-    let encoded = generate_encoded_transaction(blockhash, &[instruction], &authority_pubkey, &signers);
+    let encoded =
+        generate_encoded_transaction(blockhash, &instructions, &authority_pubkey, &signers);
     Ok(encoded)
 }
 
@@ -70,9 +75,13 @@ pub fn deactivate_stake(
     let authority_keypair = keypair_from_seed_phrase_and_passphrase(phrase, passphrase).unwrap();
     let authority_pubkey = authority_keypair.pubkey();
     let stake_pubkey = Pubkey::from_str(stake_account).unwrap();
-    let instruction = stake_instruction::deactivate_stake(&stake_pubkey, &authority_pubkey);
+    let instructions = vec![stake_instruction::deactivate_stake(
+        &stake_pubkey,
+        &authority_pubkey,
+    )];
     let signers = [&authority_keypair];
-    let encoded = generate_encoded_transaction(blockhash, &[instruction], &authority_pubkey, &signers);
+    let encoded =
+        generate_encoded_transaction(blockhash, &instructions, &authority_pubkey, &signers);
     Ok(encoded)
 }
 
@@ -87,15 +96,16 @@ pub fn withdraw_stake(
     let authority_keypair = keypair_from_seed_phrase_and_passphrase(phrase, passphrase).unwrap();
     let authority_pubkey = authority_keypair.pubkey();
     let stake_pubkey = Pubkey::from_str(stake_account).unwrap();
-    let instruction = stake_instruction::withdraw(
+    let instructions = vec![stake_instruction::withdraw(
         &stake_pubkey,
         &authority_pubkey,
         &authority_pubkey,
         lamports as u64,
         None,
-    );
+    )];
     let signers = [&authority_keypair];
-    let encoded = generate_encoded_transaction(blockhash, &[instruction], &authority_pubkey, &signers);
+    let encoded =
+        generate_encoded_transaction(blockhash, &instructions, &authority_pubkey, &signers);
     Ok(encoded)
 }
 
@@ -111,13 +121,11 @@ pub fn merge_stake(
     let authority_pubkey = authority_keypair.pubkey();
     let source_pubkey = Pubkey::from_str(source).unwrap();
     let destination_pubkey = Pubkey::from_str(destination).unwrap();
-    let instructions = stake_instruction::merge(
-        &destination_pubkey,
-        &source_pubkey,
-        &authority_pubkey,
-    );
+    let instructions =
+        stake_instruction::merge(&destination_pubkey, &source_pubkey, &authority_pubkey);
     let signers = [&authority_keypair];
-    let encoded = generate_encoded_transaction(blockhash, &instructions, &authority_pubkey, &signers);
+    let encoded =
+        generate_encoded_transaction(blockhash, &instructions, &authority_pubkey, &signers);
     Ok(encoded)
 }
 

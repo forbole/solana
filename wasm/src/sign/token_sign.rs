@@ -69,7 +69,7 @@ pub fn mint_token(
     let authority_pubkey = authority_keypair.pubkey();
     let token_pubkey = Pubkey::from_str(token).unwrap();
     let recipient_pubkey = Pubkey::from_str(recipient).unwrap();
-    let instruction = spl_token_instruction::mint_to_checked(
+    let instructions = vec![spl_token_instruction::mint_to_checked(
         &spl_token::id(),
         &token_pubkey,
         &recipient_pubkey,
@@ -78,10 +78,10 @@ pub fn mint_token(
         amount as u64,
         decimals,
     )
-    .unwrap();
+    .unwrap()];
     let signers = [&authority_keypair];
     let encoded =
-        generate_encoded_transaction(blockhash, &[instruction], &authority_pubkey, &signers);
+        generate_encoded_transaction(blockhash, &instructions, &authority_pubkey, &signers);
     Ok(encoded)
 }
 
@@ -99,7 +99,7 @@ pub fn burn_token(
     let authority_pubkey = authority_keypair.pubkey();
     let token_account_pubkey = Pubkey::from_str(token_account).unwrap();
     let mint_pubkey = Pubkey::from_str(mint).unwrap();
-    let instruction = spl_token_instruction::burn_checked(
+    let instructions = vec![spl_token_instruction::burn_checked(
         &spl_token::id(),
         &token_account_pubkey,
         &mint_pubkey,
@@ -107,10 +107,11 @@ pub fn burn_token(
         &[],
         amount as u64,
         decimals,
-    ).unwrap();
+    )
+    .unwrap()];
     let signers = [&authority_keypair];
     let encoded =
-        generate_encoded_transaction(blockhash, &[instruction], &authority_pubkey, &signers);
+        generate_encoded_transaction(blockhash, &instructions, &authority_pubkey, &signers);
     Ok(encoded)
 }
 
@@ -168,8 +169,7 @@ pub fn transfer_token(
     let source_pubkey = Pubkey::from_str(source).unwrap();
     let mint_pubkey = Pubkey::from_str(mint).unwrap();
     let destination_pubkey = Pubkey::from_str(destination).unwrap();
-
-    let instruction = spl_token_instruction::transfer_checked(
+    let instructions = vec![spl_token_instruction::transfer_checked(
         &spl_token::id(),
         &source_pubkey,
         &mint_pubkey,
@@ -179,10 +179,10 @@ pub fn transfer_token(
         amount as u64,
         decimals,
     )
-    .unwrap();
+    .unwrap()];
     let signers = [&authority_keypair];
     let encoded =
-        generate_encoded_transaction(blockhash, &[instruction], &authority_pubkey, &signers);
+        generate_encoded_transaction(blockhash, &instructions, &authority_pubkey, &signers);
     Ok(encoded)
 }
 
@@ -209,7 +209,7 @@ mod test {
         mint_token(hash, phrase, passphrase, &token, &account, 100, 6).unwrap();
     }
     #[wasm_bindgen_test]
-    fn test_burn_token(){
+    fn test_burn_token() {
         let hash = "3r1DbHt5RtsQfdDMyLaeBkoQqMcn3m4S4kDLFj4YHvae";
         let phrase =
             "plunge bitter method anchor slogan talent draft obscure mimic hover ordinary tiny";
