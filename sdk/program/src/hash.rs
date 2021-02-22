@@ -1,6 +1,7 @@
 //! The `hash` module provides functions for creating SHA-256 hashes.
 
 use crate::sanitize::Sanitize;
+use borsh::{BorshDeserialize, BorshSchema, BorshSerialize};
 use sha2::{Digest, Sha256};
 use std::{convert::TryFrom, fmt, mem, str::FromStr};
 use thiserror::Error;
@@ -9,7 +10,19 @@ pub const HASH_BYTES: usize = 32;
 /// Maximum string length of a base58 encoded hash
 const MAX_BASE58_LEN: usize = 44;
 #[derive(
-    Serialize, Deserialize, Clone, Copy, Default, Eq, PartialEq, Ord, PartialOrd, Hash
+    Serialize,
+    Deserialize,
+    BorshSerialize,
+    BorshDeserialize,
+    BorshSchema,
+    Clone,
+    Copy,
+    Default,
+    Eq,
+    PartialEq,
+    Ord,
+    PartialOrd,
+    Hash,
 )]
 #[cfg_attr(not(target_arch = "wasm32"), derive(AbiExample))]
 #[repr(transparent)]

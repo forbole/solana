@@ -109,7 +109,7 @@ impl ExecuteTimings {
 }
 
 type BankStatusCache = StatusCache<Result<()>>;
-#[frozen_abi(digest = "MUmkgPsCRrWL2HEsMEvpkWMis35kbBnaEZtrph5P6bk")]
+#[frozen_abi(digest = "GESbL4xC5ndicqqZeCW4fEHtNR71NMESVWM3i2Ty2MY9")]
 pub type BankSlotDelta = SlotDelta<Result<()>>;
 type TransactionAccountRefCells = Vec<Rc<RefCell<Account>>>;
 type TransactionAccountDepRefCells = Vec<(Pubkey, RefCell<Account>)>;
@@ -2879,7 +2879,7 @@ impl Bank {
         let mut transaction_log_messages = Vec::with_capacity(txs.len());
         let bpf_compute_budget = self
             .bpf_compute_budget
-            .unwrap_or_else(|| BpfComputeBudget::new(&self.feature_set));
+            .unwrap_or_else(BpfComputeBudget::new);
 
         let executed: Vec<TransactionExecutionResult> = loaded_accounts
             .iter_mut()
