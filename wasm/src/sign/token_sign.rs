@@ -45,7 +45,7 @@ pub fn create_token(
         )
         .unwrap(),
     ];
-    let signers = [&authority_keypair, &authority_keypair, &token_keypair];
+    let signers = [&authority_keypair, &token_keypair];
     let encoded =
         generate_encoded_transaction(blockhash, &instructions, &authority_pubkey, &signers);
     let result = PubkeyAndEncodedTransaction {
@@ -55,15 +55,15 @@ pub fn create_token(
     Ok(JsValue::from_serde(&result).unwrap())
 }
 
-#[wasm_bindgen(js_name = "tokenMintTo")]
-pub fn token_mint_to(
+#[wasm_bindgen(js_name = "mintToken")]
+pub fn mint_token(
     blockhash: &str,
     phrase: &str,
     passphrase: &str,
     token: &str,
     recipient: &str,
     amount: u32,
-    decimals: u8
+    decimals: u8,
 ) -> Result<String, JsValue> {
     let authority_keypair = keypair_from_seed_phrase_and_passphrase(phrase, passphrase).unwrap();
     let authority_pubkey = authority_keypair.pubkey();
@@ -73,6 +73,36 @@ pub fn token_mint_to(
         &spl_token::id(),
         &token_pubkey,
         &recipient_pubkey,
+        &authority_pubkey,
+        &[],
+        amount as u64,
+        decimals,
+    )
+    .unwrap();
+    let signers = [&authority_keypair];
+    let encoded =
+        generate_encoded_transaction(blockhash, &[instruction], &authority_pubkey, &signers);
+    Ok(encoded)
+}
+
+#[wasm_bindgen(js_name = "burnToken")]
+pub fn burn_token(
+    blockhash: &str,
+    phrase: &str,
+    passphrase: &str,
+    mint: &str,
+    token_account: &str,
+    amount: u32,
+    decimals: u8,
+) -> Result<String, JsValue> {
+    let authority_keypair = keypair_from_seed_phrase_and_passphrase(phrase, passphrase).unwrap();
+    let authority_pubkey = authority_keypair.pubkey();
+    let token_account_pubkey = Pubkey::from_str(token_account).unwrap();
+    let mint_pubkey = Pubkey::from_str(mint).unwrap();
+    let instruction = spl_token_instruction::burn_checked(
+        &spl_token::id(),
+        &token_account_pubkey,
+        &mint_pubkey,
         &authority_pubkey,
         &[],
         amount as u64,
@@ -89,11 +119,11 @@ pub fn create_token_account(
     blockhash: &str,
     phrase: &str,
     passphrase: &str,
-    token: &str,
+    mint: &str,
 ) -> Result<JsValue, JsValue> {
     let authority_keypair = keypair_from_seed_phrase_and_passphrase(phrase, passphrase).unwrap();
     let authority_pubkey = authority_keypair.pubkey();
-    let token_pubkey = Pubkey::from_str(token).unwrap();
+    let mint_pubkey = Pubkey::from_str(mint).unwrap();
     let account_keypair = Keypair::new();
     let account_pubkey = account_keypair.pubkey();
     let instructions = vec![
@@ -107,12 +137,12 @@ pub fn create_token_account(
         spl_token_instruction::initialize_account(
             &spl_token::id(),
             &account_pubkey,
-            &token_pubkey,
+            &mint_pubkey,
             &authority_pubkey,
         )
         .unwrap(),
     ];
-    let signers = [&authority_keypair, &authority_keypair, &account_keypair];
+    let signers = [&authority_keypair, &account_keypair];
     let encoded =
         generate_encoded_transaction(blockhash, &instructions, &authority_pubkey, &signers);
     let result = PubkeyAndEncodedTransaction {
@@ -127,8 +157,8 @@ pub fn transfer_token(
     blockhash: &str,
     phrase: &str,
     passphrase: &str,
-    source: &str,
     mint: &str,
+    source: &str,
     destination: &str,
     amount: i32,
     decimals: u8,
@@ -169,14 +199,24 @@ mod test {
         create_token(hash, phrase, passphrase, 9, false).unwrap();
     }
     #[wasm_bindgen_test]
-    fn test_token_mint_to(){
+    fn test_mint_token() {
         let hash = "3r1DbHt5RtsQfdDMyLaeBkoQqMcn3m4S4kDLFj4YHvae";
         let phrase =
             "plunge bitter method anchor slogan talent draft obscure mimic hover ordinary tiny";
         let passphrase = "";
         let token = Pubkey::new_unique().to_string();
-        let recipient =  Pubkey::new_unique().to_string();
-        token_mint_to(hash, phrase, passphrase, &token, &recipient, 100, 6).unwrap();
+        let account = Pubkey::new_unique().to_string();
+        mint_token(hash, phrase, passphrase, &token, &account, 100, 6).unwrap();
+    }
+    #[wasm_bindgen_test]
+    fn test_burn_token(){
+        let hash = "3r1DbHt5RtsQfdDMyLaeBkoQqMcn3m4S4kDLFj4YHvae";
+        let phrase =
+            "plunge bitter method anchor slogan talent draft obscure mimic hover ordinary tiny";
+        let passphrase = "";
+        let token = Pubkey::new_unique().to_string();
+        let account = Pubkey::new_unique().to_string();
+        burn_token(hash, phrase, passphrase, &token, &account, 100, 6).unwrap();
     }
     #[wasm_bindgen_test]
     fn test_create_token_account() {
@@ -196,6 +236,16 @@ mod test {
         let source = Pubkey::new_unique().to_string();
         let token = Pubkey::new_unique().to_string();
         let destination = Pubkey::new_unique().to_string();
-        transfer_token(hash, phrase, passphrase, &source, &token, &destination, 100, 6).unwrap();
+        transfer_token(
+            hash,
+            phrase,
+            passphrase,
+            &token,
+            &source,
+            &destination,
+            100,
+            6,
+        )
+        .unwrap();
     }
 }
