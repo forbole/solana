@@ -91,7 +91,7 @@ pub fn withdraw_stake(
     phrase: &str,
     passphrase: &str,
     stake_account: &str,
-    lamports: u64,
+    lamports: u32,
 ) -> Result<String, JsValue> {
     let authority_keypair = keypair_from_seed_phrase_and_passphrase(phrase, passphrase).unwrap();
     let authority_pubkey = authority_keypair.pubkey();

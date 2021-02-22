@@ -161,7 +161,7 @@ pub fn transfer_token(
     mint: &str,
     source: &str,
     destination: &str,
-    amount: i32,
+    amount: u32,
     decimals: u8,
 ) -> Result<String, JsValue> {
     let authority_keypair = keypair_from_seed_phrase_and_passphrase(phrase, passphrase).unwrap();
