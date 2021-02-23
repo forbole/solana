@@ -1,7 +1,7 @@
 use base64;
 use bincode::serialize;
 use solana_sdk::{
-    hash::Hash, instruction::Instruction, message::Message, pubkey::Pubkey, signers::Signers,
+    hash::{Hash, ParseHashError}, instruction::Instruction, message::Message, pubkey::Pubkey, signers::Signers,
     transaction::Transaction,
 };
 use std::str::FromStr;
@@ -15,11 +15,11 @@ fn generate_encoded_transaction<T: Signers>(
     instructions: &[Instruction],
     authority_pubkey: &Pubkey,
     signers: &T,
-) -> String {
-    let recent_hash = Hash::from_str(blockhash).unwrap();
+) -> Result<String, ParseHashError> {
+    let recent_hash = Hash::from_str(blockhash)?;
     let message = Message::new(instructions, Some(authority_pubkey));
     let tx = Transaction::new(signers, message, recent_hash);
-    serialize_encode_transaction(&tx)
+    Ok(serialize_encode_transaction(&tx))
 }
 
 fn serialize_encode_transaction(transaction: &Transaction) -> String {

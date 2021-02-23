@@ -1,4 +1,4 @@
-use crate::{sign::generate_encoded_transaction, types::PubkeyAndEncodedTransaction};
+use crate::{jserr, sign::generate_encoded_transaction, types::PubkeyAndEncodedTransaction};
 use solana_program::{program_pack::Pack, rent::Rent, system_instruction};
 use solana_sdk::{
     pubkey::Pubkey,
@@ -19,7 +19,7 @@ pub fn create_token(
     decimals: u8,
     enable_freeze: bool,
 ) -> Result<JsValue, JsValue> {
-    let authority_keypair = keypair_from_seed_phrase_and_passphrase(phrase, passphrase).unwrap();
+    let authority_keypair = jserr!(keypair_from_seed_phrase_and_passphrase(phrase, passphrase));
     let authority_pubkey = authority_keypair.pubkey();
     let token_keypair = Keypair::new();
     let token_pubkey = token_keypair.pubkey();
@@ -36,23 +36,26 @@ pub fn create_token(
             Mint::LEN as u64,
             &spl_token::id(),
         ),
-        spl_token_instruction::initialize_mint(
+        jserr!(spl_token_instruction::initialize_mint(
             &spl_token::id(),
             &token_pubkey,
             &authority_pubkey,
             freeze_authority_pubkey.as_ref(),
             decimals,
-        )
-        .unwrap(),
+        )),
     ];
     let signers = [&authority_keypair, &token_keypair];
-    let encoded =
-        generate_encoded_transaction(blockhash, &instructions, &authority_pubkey, &signers);
+    let encoded = jserr!(generate_encoded_transaction(
+        blockhash,
+        &instructions,
+        &authority_pubkey,
+        &signers
+    ));
     let result = PubkeyAndEncodedTransaction {
         pubkey: token_pubkey.to_string(),
         encoded: encoded,
     };
-    Ok(JsValue::from_serde(&result).unwrap())
+    Ok(jserr!(JsValue::from_serde(&result)))
 }
 
 #[wasm_bindgen(js_name = "mintToken")]
@@ -65,11 +68,11 @@ pub fn mint_token(
     amount: u32,
     decimals: u8,
 ) -> Result<String, JsValue> {
-    let authority_keypair = keypair_from_seed_phrase_and_passphrase(phrase, passphrase).unwrap();
+    let authority_keypair = jserr!(keypair_from_seed_phrase_and_passphrase(phrase, passphrase));
     let authority_pubkey = authority_keypair.pubkey();
-    let token_pubkey = Pubkey::from_str(token).unwrap();
-    let recipient_pubkey = Pubkey::from_str(recipient).unwrap();
-    let instructions = vec![spl_token_instruction::mint_to_checked(
+    let token_pubkey = jserr!(Pubkey::from_str(token));
+    let recipient_pubkey = jserr!(Pubkey::from_str(recipient));
+    let instructions = vec![jserr!(spl_token_instruction::mint_to_checked(
         &spl_token::id(),
         &token_pubkey,
         &recipient_pubkey,
@@ -77,11 +80,14 @@ pub fn mint_token(
         &[],
         amount as u64,
         decimals,
-    )
-    .unwrap()];
+    ))];
     let signers = [&authority_keypair];
-    let encoded =
-        generate_encoded_transaction(blockhash, &instructions, &authority_pubkey, &signers);
+    let encoded = jserr!(generate_encoded_transaction(
+        blockhash,
+        &instructions,
+        &authority_pubkey,
+        &signers
+    ));
     Ok(encoded)
 }
 
@@ -95,11 +101,11 @@ pub fn burn_token(
     amount: u32,
     decimals: u8,
 ) -> Result<String, JsValue> {
-    let authority_keypair = keypair_from_seed_phrase_and_passphrase(phrase, passphrase).unwrap();
+    let authority_keypair = jserr!(keypair_from_seed_phrase_and_passphrase(phrase, passphrase));
     let authority_pubkey = authority_keypair.pubkey();
-    let token_account_pubkey = Pubkey::from_str(token_account).unwrap();
-    let mint_pubkey = Pubkey::from_str(mint).unwrap();
-    let instructions = vec![spl_token_instruction::burn_checked(
+    let token_account_pubkey = jserr!(Pubkey::from_str(token_account));
+    let mint_pubkey = jserr!(Pubkey::from_str(mint));
+    let instructions = vec![jserr!(spl_token_instruction::burn_checked(
         &spl_token::id(),
         &token_account_pubkey,
         &mint_pubkey,
@@ -107,11 +113,14 @@ pub fn burn_token(
         &[],
         amount as u64,
         decimals,
-    )
-    .unwrap()];
+    ))];
     let signers = [&authority_keypair];
-    let encoded =
-        generate_encoded_transaction(blockhash, &instructions, &authority_pubkey, &signers);
+    let encoded = jserr!(generate_encoded_transaction(
+        blockhash,
+        &instructions,
+        &authority_pubkey,
+        &signers
+    ));
     Ok(encoded)
 }
 
@@ -122,9 +131,9 @@ pub fn create_token_account(
     passphrase: &str,
     mint: &str,
 ) -> Result<JsValue, JsValue> {
-    let authority_keypair = keypair_from_seed_phrase_and_passphrase(phrase, passphrase).unwrap();
+    let authority_keypair = jserr!(keypair_from_seed_phrase_and_passphrase(phrase, passphrase));
     let authority_pubkey = authority_keypair.pubkey();
-    let mint_pubkey = Pubkey::from_str(mint).unwrap();
+    let mint_pubkey = jserr!(Pubkey::from_str(mint));
     let account_keypair = Keypair::new();
     let account_pubkey = account_keypair.pubkey();
     let instructions = vec![
@@ -135,22 +144,25 @@ pub fn create_token_account(
             Account::LEN as u64,
             &spl_token::id(),
         ),
-        spl_token_instruction::initialize_account(
+        jserr!(spl_token_instruction::initialize_account(
             &spl_token::id(),
             &account_pubkey,
             &mint_pubkey,
             &authority_pubkey,
-        )
-        .unwrap(),
+        )),
     ];
     let signers = [&authority_keypair, &account_keypair];
-    let encoded =
-        generate_encoded_transaction(blockhash, &instructions, &authority_pubkey, &signers);
+    let encoded = jserr!(generate_encoded_transaction(
+        blockhash,
+        &instructions,
+        &authority_pubkey,
+        &signers
+    ));
     let result = PubkeyAndEncodedTransaction {
         pubkey: account_pubkey.to_string(),
         encoded: encoded,
     };
-    Ok(JsValue::from_serde(&result).unwrap())
+    Ok(jserr!(JsValue::from_serde(&result)))
 }
 
 #[wasm_bindgen(js_name = "transferToken")]
@@ -164,12 +176,12 @@ pub fn transfer_token(
     amount: u32,
     decimals: u8,
 ) -> Result<String, JsValue> {
-    let authority_keypair = keypair_from_seed_phrase_and_passphrase(phrase, passphrase).unwrap();
+    let authority_keypair = jserr!(keypair_from_seed_phrase_and_passphrase(phrase, passphrase));
     let authority_pubkey = authority_keypair.pubkey();
-    let source_pubkey = Pubkey::from_str(source).unwrap();
-    let mint_pubkey = Pubkey::from_str(mint).unwrap();
+    let source_pubkey = jserr!(Pubkey::from_str(source));
+    let mint_pubkey = jserr!(Pubkey::from_str(mint));
     let destination_pubkey = Pubkey::from_str(destination).unwrap();
-    let instructions = vec![spl_token_instruction::transfer_checked(
+    let instructions = vec![jserr!(spl_token_instruction::transfer_checked(
         &spl_token::id(),
         &source_pubkey,
         &mint_pubkey,
@@ -178,11 +190,14 @@ pub fn transfer_token(
         &[],
         amount as u64,
         decimals,
-    )
-    .unwrap()];
+    ))];
     let signers = [&authority_keypair];
-    let encoded =
-        generate_encoded_transaction(blockhash, &instructions, &authority_pubkey, &signers);
+    let encoded = jserr!(generate_encoded_transaction(
+        blockhash,
+        &instructions,
+        &authority_pubkey,
+        &signers
+    ));
     Ok(encoded)
 }
 

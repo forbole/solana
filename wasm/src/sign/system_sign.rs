@@ -1,4 +1,4 @@
-use crate::sign::generate_encoded_transaction;
+use crate::{jserr, sign::generate_encoded_transaction};
 use solana_program::system_instruction;
 use solana_sdk::{
     pubkey::Pubkey,
@@ -15,17 +15,21 @@ pub fn transfer(
     to: &str,
     lamports: u32,
 ) -> Result<String, JsValue> {
-    let authority_keypair = keypair_from_seed_phrase_and_passphrase(phrase, passphrase).unwrap();
+    let authority_keypair = jserr!(keypair_from_seed_phrase_and_passphrase(phrase, passphrase));
     let authority_pubkey = authority_keypair.pubkey();
-    let to_pubkey = Pubkey::from_str(to).unwrap();
+    let to_pubkey = jserr!(Pubkey::from_str(to));
     let instructions = vec![system_instruction::transfer(
         &authority_pubkey,
         &to_pubkey,
         lamports as u64,
     )];
     let signers = [&authority_keypair];
-    let encoded_tx =
-        generate_encoded_transaction(blockhash, &instructions, &authority_pubkey, &signers);
+    let encoded_tx = jserr!(generate_encoded_transaction(
+        blockhash,
+        &instructions,
+        &authority_pubkey,
+        &signers
+    ));
     Ok(encoded_tx)
 }
 

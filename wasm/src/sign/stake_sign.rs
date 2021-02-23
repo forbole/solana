@@ -1,4 +1,4 @@
-use crate::{sign::generate_encoded_transaction, types::PubkeyAndEncodedTransaction};
+use crate::{jserr, sign::generate_encoded_transaction, types::PubkeyAndEncodedTransaction};
 use solana_sdk::{
     pubkey::Pubkey,
     signature::{keypair_from_seed_phrase_and_passphrase, Keypair, Signer},
@@ -17,7 +17,7 @@ pub fn create_stake_account(
     passphrase: &str,
     lamports: u32,
 ) -> Result<JsValue, JsValue> {
-    let authority_keypair = keypair_from_seed_phrase_and_passphrase(phrase, passphrase).unwrap();
+    let authority_keypair = jserr!(keypair_from_seed_phrase_and_passphrase(phrase, passphrase));
     let authority_pubkey = authority_keypair.pubkey();
     let stake_keypair = Keypair::new();
     let authorized = Authorized {
@@ -33,13 +33,17 @@ pub fn create_stake_account(
         lamports as u64,
     );
     let signers = [&authority_keypair, &stake_keypair];
-    let encoded =
-        generate_encoded_transaction(blockhash, &instructions, &authority_pubkey, &signers);
+    let encoded = jserr!(generate_encoded_transaction(
+        blockhash,
+        &instructions,
+        &authority_pubkey,
+        &signers
+    ));
     let result = PubkeyAndEncodedTransaction {
         pubkey: stake_keypair.pubkey().to_string(),
         encoded: encoded,
     };
-    Ok(JsValue::from_serde(&result).unwrap())
+    Ok(jserr!(JsValue::from_serde(&result)))
 }
 
 #[wasm_bindgen(js_name = "delegateStake")]
@@ -50,18 +54,22 @@ pub fn delegate_stake(
     stake_account: &str,
     validator: &str,
 ) -> Result<String, JsValue> {
-    let authority_keypair = keypair_from_seed_phrase_and_passphrase(phrase, passphrase).unwrap();
+    let authority_keypair = jserr!(keypair_from_seed_phrase_and_passphrase(phrase, passphrase));
     let authority_pubkey = authority_keypair.pubkey();
-    let stake_pubkey = Pubkey::from_str(stake_account).unwrap();
-    let validator_pubkey = Pubkey::from_str(validator).unwrap();
+    let stake_pubkey = jserr!(Pubkey::from_str(stake_account));
+    let validator_pubkey = jserr!(Pubkey::from_str(validator));
     let instructions = vec![stake_instruction::delegate_stake(
         &stake_pubkey,
         &authority_pubkey,
         &validator_pubkey,
     )];
     let signers = [&authority_keypair];
-    let encoded =
-        generate_encoded_transaction(blockhash, &instructions, &authority_pubkey, &signers);
+    let encoded = jserr!(generate_encoded_transaction(
+        blockhash,
+        &instructions,
+        &authority_pubkey,
+        &signers
+    ));
     Ok(encoded)
 }
 
@@ -72,7 +80,7 @@ pub fn deactivate_stake(
     passphrase: &str,
     stake_account: &str,
 ) -> Result<String, JsValue> {
-    let authority_keypair = keypair_from_seed_phrase_and_passphrase(phrase, passphrase).unwrap();
+    let authority_keypair = jserr!(keypair_from_seed_phrase_and_passphrase(phrase, passphrase));
     let authority_pubkey = authority_keypair.pubkey();
     let stake_pubkey = Pubkey::from_str(stake_account).unwrap();
     let instructions = vec![stake_instruction::deactivate_stake(
@@ -80,8 +88,12 @@ pub fn deactivate_stake(
         &authority_pubkey,
     )];
     let signers = [&authority_keypair];
-    let encoded =
-        generate_encoded_transaction(blockhash, &instructions, &authority_pubkey, &signers);
+    let encoded = jserr!(generate_encoded_transaction(
+        blockhash,
+        &instructions,
+        &authority_pubkey,
+        &signers
+    ));
     Ok(encoded)
 }
 
@@ -93,9 +105,9 @@ pub fn withdraw_stake(
     stake_account: &str,
     lamports: u32,
 ) -> Result<String, JsValue> {
-    let authority_keypair = keypair_from_seed_phrase_and_passphrase(phrase, passphrase).unwrap();
+    let authority_keypair = jserr!(keypair_from_seed_phrase_and_passphrase(phrase, passphrase));
     let authority_pubkey = authority_keypair.pubkey();
-    let stake_pubkey = Pubkey::from_str(stake_account).unwrap();
+    let stake_pubkey = jserr!(Pubkey::from_str(stake_account));
     let instructions = vec![stake_instruction::withdraw(
         &stake_pubkey,
         &authority_pubkey,
@@ -104,8 +116,12 @@ pub fn withdraw_stake(
         None,
     )];
     let signers = [&authority_keypair];
-    let encoded =
-        generate_encoded_transaction(blockhash, &instructions, &authority_pubkey, &signers);
+    let encoded = jserr!(generate_encoded_transaction(
+        blockhash,
+        &instructions,
+        &authority_pubkey,
+        &signers
+    ));
     Ok(encoded)
 }
 
@@ -117,15 +133,19 @@ pub fn merge_stake(
     source: &str,
     destination: &str,
 ) -> Result<String, JsValue> {
-    let authority_keypair = keypair_from_seed_phrase_and_passphrase(phrase, passphrase).unwrap();
+    let authority_keypair = jserr!(keypair_from_seed_phrase_and_passphrase(phrase, passphrase));
     let authority_pubkey = authority_keypair.pubkey();
-    let source_pubkey = Pubkey::from_str(source).unwrap();
-    let destination_pubkey = Pubkey::from_str(destination).unwrap();
+    let source_pubkey = jserr!(Pubkey::from_str(source));
+    let destination_pubkey = jserr!(Pubkey::from_str(destination));
     let instructions =
         stake_instruction::merge(&destination_pubkey, &source_pubkey, &authority_pubkey);
     let signers = [&authority_keypair];
-    let encoded =
-        generate_encoded_transaction(blockhash, &instructions, &authority_pubkey, &signers);
+    let encoded = jserr!(generate_encoded_transaction(
+        blockhash,
+        &instructions,
+        &authority_pubkey,
+        &signers
+    ));
     Ok(encoded)
 }
 
