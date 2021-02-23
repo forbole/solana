@@ -5,10 +5,16 @@ use solana_sdk::{
 };
 use solana_stake_program::{
     stake_instruction,
-    stake_state::{Authorized, Lockup},
+    stake_state::{Authorized, Lockup, StakeAuthorize},
 };
 use std::str::FromStr;
 use wasm_bindgen::prelude::*;
+
+#[wasm_bindgen]
+pub enum StakeAuthorizeInput{
+    Staker,
+    Withdrawer,
+}
 
 #[wasm_bindgen(js_name = "createStakeAccount")]
 pub fn create_stake_account(
@@ -20,6 +26,7 @@ pub fn create_stake_account(
     let authority_keypair = jserr!(keypair_from_seed_phrase_and_passphrase(phrase, passphrase));
     let authority_pubkey = authority_keypair.pubkey();
     let stake_keypair = Keypair::new();
+    let stake_pubkey = stake_keypair.pubkey();
     let authorized = Authorized {
         staker: authority_pubkey,
         withdrawer: authority_pubkey,
@@ -27,7 +34,7 @@ pub fn create_stake_account(
     let lockup = Lockup::default();
     let instructions = stake_instruction::create_account(
         &authority_pubkey,
-        &stake_keypair.pubkey(),
+        &stake_pubkey,
         &authorized,
         &lockup,
         lamports as u64,
@@ -40,7 +47,7 @@ pub fn create_stake_account(
         &signers
     ));
     let result = PubkeyAndEncodedTransaction {
-        pubkey: stake_keypair.pubkey().to_string(),
+        pubkey: stake_pubkey.to_string(),
         encoded: encoded,
     };
     Ok(jserr!(JsValue::from_serde(&result)))
@@ -149,6 +156,64 @@ pub fn merge_stake(
     Ok(encoded)
 }
 
+#[wasm_bindgen(js_name = "splitStake")]
+pub fn split_stake(
+    blockhash: &str,
+    phrase: &str,
+    passphrase: &str,
+    source: &str,
+    lamports: u32,
+) -> Result<JsValue, JsValue> {
+    let authority_keypair = jserr!(keypair_from_seed_phrase_and_passphrase(phrase, passphrase));
+    let authority_pubkey = authority_keypair.pubkey();
+    let source_pubkey = jserr!(Pubkey::from_str(source));
+    let split_keypair = Keypair::new();
+    let split_pubkey = split_keypair.pubkey();
+    let instructions =
+        stake_instruction::split(&source_pubkey, &authority_pubkey, lamports as u64, &split_pubkey);
+    let signers = [&authority_keypair, &split_keypair];
+    let encoded = jserr!(generate_encoded_transaction(
+        blockhash,
+        &instructions,
+        &authority_pubkey,
+        &signers
+    ));
+    let result = PubkeyAndEncodedTransaction {
+        pubkey: split_pubkey.to_string(),
+        encoded: encoded,
+    };
+    Ok(jserr!(JsValue::from_serde(&result)))
+}
+
+#[wasm_bindgen(js_name = "authorizeStake")]
+pub fn authorize_stake(
+    blockhash: &str,
+    phrase: &str,
+    passphrase: &str,
+    source: &str,
+    new_authority: &str,
+    authorize_type: StakeAuthorizeInput,
+) -> Result<String, JsValue> {
+    let authority_keypair = jserr!(keypair_from_seed_phrase_and_passphrase(phrase, passphrase));
+    let authority_pubkey = authority_keypair.pubkey();
+    let source_pubkey = jserr!(Pubkey::from_str(source));
+    let new_authoriy_pubkey = jserr!(Pubkey::from_str(new_authority));
+    let stake_authorize = match authorize_type {
+        StakeAuthorizeInput::Staker => StakeAuthorize::Staker,
+        StakeAuthorizeInput::Withdrawer => StakeAuthorize::Withdrawer
+    };
+    let instructions =
+        vec![stake_instruction::authorize(&source_pubkey, &authority_pubkey, &new_authoriy_pubkey, stake_authorize, None )];
+    let signers = [&authority_keypair];
+    let encoded = jserr!(generate_encoded_transaction(
+        blockhash,
+        &instructions,
+        &authority_pubkey,
+        &signers
+    ));
+    Ok(encoded)
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -203,5 +268,27 @@ mod test {
         let source = Pubkey::new_unique().to_string();
         let destination = Pubkey::new_unique().to_string();
         merge_stake(hash, phrase, passphrase, &source, &destination).unwrap();
+    }
+    #[wasm_bindgen_test]
+    fn test_split_stake() {
+        let hash = "3r1DbHt5RtsQfdDMyLaeBkoQqMcn3m4S4kDLFj4YHvae";
+        let phrase =
+            "plunge bitter method anchor slogan talent draft obscure mimic hover ordinary tiny";
+        let passphrase = "";
+        let source = Pubkey::new_unique().to_string();
+        split_stake(hash, phrase, passphrase, &source, 100).unwrap();
+    }
+    #[wasm_bindgen_test]
+    fn test_authorize_stake() {
+        let hash = "3r1DbHt5RtsQfdDMyLaeBkoQqMcn3m4S4kDLFj4YHvae";
+        let phrase =
+            "plunge bitter method anchor slogan talent draft obscure mimic hover ordinary tiny";
+        let passphrase = "";
+        let source = Pubkey::new_unique().to_string();
+        let new_authority = Pubkey::new_unique().to_string();
+        let mut authorize_type = StakeAuthorizeInput::Staker;
+        authorize_stake(hash, phrase, passphrase, &source, &new_authority, authorize_type).unwrap();
+        authorize_type = StakeAuthorizeInput::Withdrawer;
+        authorize_stake(hash, phrase, passphrase, &source, &new_authority, authorize_type).unwrap();
     }
 }
