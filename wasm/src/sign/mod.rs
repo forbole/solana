@@ -20,11 +20,11 @@ fn generate_encoded_transaction<T: Signers>(
     let message = Message::new(instructions, Some(authority_pubkey));
     let mut tx = Transaction::new_unsigned(message);
     tx.try_sign(signers, recent_hash)?;
-    Ok(serialize_encode_transaction(&tx))
+    Ok(serialize_encode_transaction(&tx)?)
 }
 
-fn serialize_encode_transaction(transaction: &Transaction) -> String {
-    let serialized = serialize(transaction).unwrap();
+fn serialize_encode_transaction(transaction: &Transaction) -> Result<String, Box<dyn std::error::Error>> {
+    let serialized = serialize(transaction)?;
     let encoded = base64::encode(serialized);
-    encoded
+    Ok(encoded)
 }
