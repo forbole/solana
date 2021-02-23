@@ -180,7 +180,7 @@ pub fn transfer_token(
     let authority_pubkey = authority_keypair.pubkey();
     let source_pubkey = jserr!(Pubkey::from_str(source));
     let mint_pubkey = jserr!(Pubkey::from_str(mint));
-    let destination_pubkey = Pubkey::from_str(destination).unwrap();
+    let destination_pubkey = jserr!(Pubkey::from_str(destination));
     let instructions = vec![jserr!(spl_token_instruction::transfer_checked(
         &spl_token::id(),
         &source_pubkey,
