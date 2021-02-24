@@ -6,10 +6,19 @@ use solana_sdk::{
 };
 use spl_token::{
     instruction as spl_token_instruction,
+    instruction::AuthorityType,
     state::{Account, Mint},
 };
 use std::str::FromStr;
 use wasm_bindgen::prelude::*;
+
+#[wasm_bindgen]
+pub enum AuthorityTypeInput {
+    MintTokens,
+    FreezeAccount,
+    AccountOwner,
+    CloseAccount,
+}
 
 #[wasm_bindgen(js_name = "createToken")]
 pub fn create_token(
@@ -257,6 +266,49 @@ pub fn revoke_token(
     Ok(encoded)
 }
 
+#[wasm_bindgen(js_name = "setSplAuthority")]
+pub fn set_spl_authority(
+    blockhash: &str,
+    phrase: &str,
+    passphrase: &str,
+    source: &str,
+    new_authority: &str,
+    spl_authorize: AuthorityTypeInput,
+) -> Result<String, JsValue> {
+    let authority_keypair = jserr!(keypair_from_seed_phrase_and_passphrase(phrase, passphrase));
+    let authority_pubkey = authority_keypair.pubkey();
+    let source_pubkey = jserr!(Pubkey::from_str(source));
+    // spl token authority can be none
+    let new_authoriy_pubkey = match Pubkey::from_str(new_authority) {
+        Ok(pubkey) => Some(pubkey),
+        Err(_) => None,
+    };
+    let authority_type = match spl_authorize {
+        AuthorityTypeInput::MintTokens => AuthorityType::MintTokens,
+        AuthorityTypeInput::FreezeAccount => AuthorityType::FreezeAccount,
+        AuthorityTypeInput::AccountOwner => AuthorityType::AccountOwner,
+        AuthorityTypeInput::CloseAccount => AuthorityType::CloseAccount,
+    };
+    let instructions = vec![
+        jserr!(spl_token_instruction::set_authority(
+            &spl_token::id(),
+            &source_pubkey,
+            new_authoriy_pubkey.as_ref(),
+            authority_type,
+            &authority_pubkey,
+            &[],
+        ))
+    ];
+    let signers = [&authority_keypair];
+    let encoded = jserr!(generate_encoded_transaction(
+        blockhash,
+        &instructions,
+        &authority_pubkey,
+        &signers
+    ));
+    Ok(encoded)
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -326,5 +378,15 @@ mod test {
     fn test_revoke_token() {
         let source = Pubkey::new_unique().to_string();
         revoke_token(BLOCKHASH, PHRASE, PASSPHRASE, &source).unwrap();
+    }
+    #[wasm_bindgen_test]
+    fn test_set_spl_authority(){
+        let source = Pubkey::new_unique().to_string();
+        let new_authority = Pubkey::new_unique().to_string();
+        set_spl_authority(BLOCKHASH, PHRASE, PASSPHRASE, &source, &new_authority, AuthorityTypeInput::MintTokens).unwrap();
+        set_spl_authority(BLOCKHASH, PHRASE, PASSPHRASE, &source, &new_authority, AuthorityTypeInput::AccountOwner).unwrap();
+        set_spl_authority(BLOCKHASH, PHRASE, PASSPHRASE, &source, &new_authority, AuthorityTypeInput::FreezeAccount).unwrap();
+        set_spl_authority(BLOCKHASH, PHRASE, PASSPHRASE, &source, &new_authority, AuthorityTypeInput::CloseAccount).unwrap();
+        set_spl_authority(BLOCKHASH, PHRASE, PASSPHRASE, &source, "", AuthorityTypeInput::MintTokens).unwrap();
     }
 }
