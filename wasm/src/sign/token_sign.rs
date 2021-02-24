@@ -51,10 +51,7 @@ pub fn create_token(
         &authority_pubkey,
         &signers
     ));
-    let result = PubkeyAndEncodedTransaction {
-        pubkey: token_pubkey.to_string(),
-        encoded: encoded,
-    };
+    let result = PubkeyAndEncodedTransaction::new(&token_pubkey.to_string(), &encoded);
     Ok(jserr!(JsValue::from_serde(&result)))
 }
 
@@ -144,7 +141,7 @@ pub fn create_token_account(
             Account::LEN as u64,
             &spl_token::id(),
         ),
-        jserr!(spl_token_instruction::initialize_account(
+        jserr!(spl_token_instruction::initialize_account2(
             &spl_token::id(),
             &account_pubkey,
             &mint_pubkey,
@@ -158,10 +155,7 @@ pub fn create_token_account(
         &authority_pubkey,
         &signers
     ));
-    let result = PubkeyAndEncodedTransaction {
-        pubkey: account_pubkey.to_string(),
-        encoded: encoded,
-    };
+    let result = PubkeyAndEncodedTransaction::new(&account_pubkey.to_string(), &encoded);
     Ok(jserr!(JsValue::from_serde(&result)))
 }
 
@@ -201,14 +195,77 @@ pub fn transfer_token(
     Ok(encoded)
 }
 
+#[wasm_bindgen(js_name = "approveToken")]
+pub fn approve_token(
+    blockhash: &str,
+    phrase: &str,
+    passphrase: &str,
+    mint: &str,
+    source: &str,
+    destination: &str,
+    amount: u32,
+    decimals: u8,
+) -> Result<String, JsValue> {
+    let authority_keypair = jserr!(keypair_from_seed_phrase_and_passphrase(phrase, passphrase));
+    let authority_pubkey = authority_keypair.pubkey();
+    let mint_pubkey = jserr!(Pubkey::from_str(mint));
+    let source_pubkey = jserr!(Pubkey::from_str(source));
+    let destination_pubkey = jserr!(Pubkey::from_str(destination));
+    let instructions = vec![jserr!(spl_token_instruction::approve_checked(
+        &spl_token::id(),
+        &source_pubkey,
+        &mint_pubkey,
+        &destination_pubkey,
+        &authority_pubkey,
+        &[],
+        amount as u64,
+        decimals,
+    ))];
+    let signers = [&authority_keypair];
+    let encoded = jserr!(generate_encoded_transaction(
+        blockhash,
+        &instructions,
+        &authority_pubkey,
+        &signers
+    ));
+    Ok(encoded)
+}
+
+#[wasm_bindgen(js_name = "revokeToken")]
+pub fn revoke_token(
+    blockhash: &str,
+    phrase: &str,
+    passphrase: &str,
+    source: &str,
+) -> Result<String, JsValue> {
+    let authority_keypair = jserr!(keypair_from_seed_phrase_and_passphrase(phrase, passphrase));
+    let authority_pubkey = authority_keypair.pubkey();
+    let source_pubkey = jserr!(Pubkey::from_str(source));
+    let instructions = vec![jserr!(spl_token_instruction::revoke(
+        &spl_token::id(),
+        &source_pubkey,
+        &authority_pubkey,
+        &[]
+    ))];
+    let signers = [&authority_keypair];
+    let encoded = jserr!(generate_encoded_transaction(
+        blockhash,
+        &instructions,
+        &authority_pubkey,
+        &signers
+    ));
+    Ok(encoded)
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
     use wasm_bindgen_test::*;
 
-    static BLOCKHASH : &str = "3r1DbHt5RtsQfdDMyLaeBkoQqMcn3m4S4kDLFj4YHvae";
-    static PHRASE : &str = "plunge bitter method anchor slogan talent draft obscure mimic hover ordinary tiny";
-    static PASSPHRASE : &str = "";
+    static BLOCKHASH: &str = "3r1DbHt5RtsQfdDMyLaeBkoQqMcn3m4S4kDLFj4YHvae";
+    static PHRASE: &str =
+        "plunge bitter method anchor slogan talent draft obscure mimic hover ordinary tiny";
+    static PASSPHRASE: &str = "";
 
     #[wasm_bindgen_test]
     fn test_create_token() {
@@ -247,5 +304,27 @@ mod test {
             6,
         )
         .unwrap();
+    }
+    #[wasm_bindgen_test]
+    fn test_approve_token() {
+        let source = Pubkey::new_unique().to_string();
+        let token = Pubkey::new_unique().to_string();
+        let destination = Pubkey::new_unique().to_string();
+        approve_token(
+            BLOCKHASH,
+            PHRASE,
+            PASSPHRASE,
+            &token,
+            &source,
+            &destination,
+            100,
+            6,
+        )
+        .unwrap();
+    }
+    #[wasm_bindgen_test]
+    fn test_revoke_token() {
+        let source = Pubkey::new_unique().to_string();
+        revoke_token(BLOCKHASH, PHRASE, PASSPHRASE, &source).unwrap();
     }
 }

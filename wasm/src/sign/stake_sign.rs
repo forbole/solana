@@ -11,7 +11,7 @@ use std::str::FromStr;
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
-pub enum StakeAuthorizeInput{
+pub enum StakeAuthorizeInput {
     Staker,
     Withdrawer,
 }
@@ -46,10 +46,7 @@ pub fn create_stake_account(
         &authority_pubkey,
         &signers
     ));
-    let result = PubkeyAndEncodedTransaction {
-        pubkey: stake_pubkey.to_string(),
-        encoded: encoded,
-    };
+    let result = PubkeyAndEncodedTransaction::new(&stake_pubkey.to_string(), &encoded);
     Ok(jserr!(JsValue::from_serde(&result)))
 }
 
@@ -169,8 +166,12 @@ pub fn split_stake(
     let source_pubkey = jserr!(Pubkey::from_str(source));
     let split_keypair = Keypair::new();
     let split_pubkey = split_keypair.pubkey();
-    let instructions =
-        stake_instruction::split(&source_pubkey, &authority_pubkey, lamports as u64, &split_pubkey);
+    let instructions = stake_instruction::split(
+        &source_pubkey,
+        &authority_pubkey,
+        lamports as u64,
+        &split_pubkey,
+    );
     let signers = [&authority_keypair, &split_keypair];
     let encoded = jserr!(generate_encoded_transaction(
         blockhash,
@@ -178,10 +179,7 @@ pub fn split_stake(
         &authority_pubkey,
         &signers
     ));
-    let result = PubkeyAndEncodedTransaction {
-        pubkey: split_pubkey.to_string(),
-        encoded: encoded,
-    };
+    let result = PubkeyAndEncodedTransaction::new(&split_pubkey.to_string(), &encoded);
     Ok(jserr!(JsValue::from_serde(&result)))
 }
 
@@ -200,10 +198,15 @@ pub fn authorize_stake(
     let new_authoriy_pubkey = jserr!(Pubkey::from_str(new_authority));
     let stake_authorize = match authorize_type {
         StakeAuthorizeInput::Staker => StakeAuthorize::Staker,
-        StakeAuthorizeInput::Withdrawer => StakeAuthorize::Withdrawer
+        StakeAuthorizeInput::Withdrawer => StakeAuthorize::Withdrawer,
     };
-    let instructions =
-        vec![stake_instruction::authorize(&source_pubkey, &authority_pubkey, &new_authoriy_pubkey, stake_authorize, None )];
+    let instructions = vec![stake_instruction::authorize(
+        &source_pubkey,
+        &authority_pubkey,
+        &new_authoriy_pubkey,
+        stake_authorize,
+        None,
+    )];
     let signers = [&authority_keypair];
     let encoded = jserr!(generate_encoded_transaction(
         blockhash,
@@ -219,9 +222,10 @@ mod test {
     use super::*;
     use wasm_bindgen_test::*;
 
-    static BLOCKHASH : &str = "3r1DbHt5RtsQfdDMyLaeBkoQqMcn3m4S4kDLFj4YHvae";
-    static PHRASE : &str = "plunge bitter method anchor slogan talent draft obscure mimic hover ordinary tiny";
-    static PASSPHRASE : &str = "";
+    static BLOCKHASH: &str = "3r1DbHt5RtsQfdDMyLaeBkoQqMcn3m4S4kDLFj4YHvae";
+    static PHRASE: &str =
+        "plunge bitter method anchor slogan talent draft obscure mimic hover ordinary tiny";
+    static PASSPHRASE: &str = "";
 
     #[wasm_bindgen_test]
     fn test_create_stake_account() {
@@ -263,8 +267,24 @@ mod test {
         let source = Pubkey::new_unique().to_string();
         let new_authority = Pubkey::new_unique().to_string();
         let mut authorize_type = StakeAuthorizeInput::Staker;
-        authorize_stake(BLOCKHASH, PHRASE, PASSPHRASE, &source, &new_authority, authorize_type).unwrap();
+        authorize_stake(
+            BLOCKHASH,
+            PHRASE,
+            PASSPHRASE,
+            &source,
+            &new_authority,
+            authorize_type,
+        )
+        .unwrap();
         authorize_type = StakeAuthorizeInput::Withdrawer;
-        authorize_stake(BLOCKHASH, PHRASE, PASSPHRASE, &source, &new_authority, authorize_type).unwrap();
+        authorize_stake(
+            BLOCKHASH,
+            PHRASE,
+            PASSPHRASE,
+            &source,
+            &new_authority,
+            authorize_type,
+        )
+        .unwrap();
     }
 }

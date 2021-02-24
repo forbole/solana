@@ -10,9 +10,6 @@ pub fn generate_key(passphrase: &str) -> Result<JsValue, JsValue> {
     let language = Language::English;
     let phrase = Mnemonic::new(mnemonic_type, language).into_phrase();
     let keypair = jserr!(keypair_from_seed_phrase_and_passphrase(&phrase, passphrase));
-    let pubkey_and_passphrase = PubkeyAndPhrase{
-        pubkey: keypair.pubkey().to_string(),
-        phrase: phrase
-    };
+    let pubkey_and_passphrase = PubkeyAndPhrase::new(&keypair.pubkey().to_string(), &phrase);
     Ok(jserr!(JsValue::from_serde(&pubkey_and_passphrase)))
 }
