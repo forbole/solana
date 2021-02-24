@@ -205,56 +205,41 @@ pub fn transfer_token(
 mod test {
     use super::*;
     use wasm_bindgen_test::*;
+
+    static BLOCKHASH : &str = "3r1DbHt5RtsQfdDMyLaeBkoQqMcn3m4S4kDLFj4YHvae";
+    static PHRASE : &str = "plunge bitter method anchor slogan talent draft obscure mimic hover ordinary tiny";
+    static PASSPHRASE : &str = "";
+
     #[wasm_bindgen_test]
     fn test_create_token() {
-        let hash = "3r1DbHt5RtsQfdDMyLaeBkoQqMcn3m4S4kDLFj4YHvae";
-        let phrase =
-            "plunge bitter method anchor slogan talent draft obscure mimic hover ordinary tiny";
-        let passphrase = "";
-        create_token(hash, phrase, passphrase, 9, false).unwrap();
+        create_token(BLOCKHASH, PHRASE, PASSPHRASE, 9, false).unwrap();
     }
     #[wasm_bindgen_test]
     fn test_mint_token() {
-        let hash = "3r1DbHt5RtsQfdDMyLaeBkoQqMcn3m4S4kDLFj4YHvae";
-        let phrase =
-            "plunge bitter method anchor slogan talent draft obscure mimic hover ordinary tiny";
-        let passphrase = "";
         let token = Pubkey::new_unique().to_string();
         let account = Pubkey::new_unique().to_string();
-        mint_token(hash, phrase, passphrase, &token, &account, 100, 6).unwrap();
+        mint_token(BLOCKHASH, PHRASE, PASSPHRASE, &token, &account, 100, 6).unwrap();
     }
     #[wasm_bindgen_test]
     fn test_burn_token() {
-        let hash = "3r1DbHt5RtsQfdDMyLaeBkoQqMcn3m4S4kDLFj4YHvae";
-        let phrase =
-            "plunge bitter method anchor slogan talent draft obscure mimic hover ordinary tiny";
-        let passphrase = "";
         let token = Pubkey::new_unique().to_string();
         let account = Pubkey::new_unique().to_string();
-        burn_token(hash, phrase, passphrase, &token, &account, 100, 6).unwrap();
+        burn_token(BLOCKHASH, PHRASE, PASSPHRASE, &token, &account, 100, 6).unwrap();
     }
     #[wasm_bindgen_test]
     fn test_create_token_account() {
-        let hash = "3r1DbHt5RtsQfdDMyLaeBkoQqMcn3m4S4kDLFj4YHvae";
-        let phrase =
-            "plunge bitter method anchor slogan talent draft obscure mimic hover ordinary tiny";
-        let passphrase = "";
         let token = Pubkey::new_unique().to_string();
-        create_token_account(hash, phrase, passphrase, &token).unwrap();
+        create_token_account(BLOCKHASH, PHRASE, PASSPHRASE, &token).unwrap();
     }
     #[wasm_bindgen_test]
     fn test_transfer_token() {
-        let hash = "3r1DbHt5RtsQfdDMyLaeBkoQqMcn3m4S4kDLFj4YHvae";
-        let phrase =
-            "plunge bitter method anchor slogan talent draft obscure mimic hover ordinary tiny";
-        let passphrase = "";
         let source = Pubkey::new_unique().to_string();
         let token = Pubkey::new_unique().to_string();
         let destination = Pubkey::new_unique().to_string();
         transfer_token(
-            hash,
-            phrase,
-            passphrase,
+            BLOCKHASH,
+            PHRASE,
+            PASSPHRASE,
             &token,
             &source,
             &destination,

@@ -38,13 +38,13 @@ mod test {
     use super::*;
     use wasm_bindgen_test::*;
 
+    static BLOCKHASH : &str = "3r1DbHt5RtsQfdDMyLaeBkoQqMcn3m4S4kDLFj4YHvae";
+    static PHRASE : &str = "plunge bitter method anchor slogan talent draft obscure mimic hover ordinary tiny";
+    static PASSPHRASE : &str = "";
+
     #[wasm_bindgen_test]
     fn test_transfer() {
-        let hash = "3r1DbHt5RtsQfdDMyLaeBkoQqMcn3m4S4kDLFj4YHvae";
-        let phrase =
-            "plunge bitter method anchor slogan talent draft obscure mimic hover ordinary tiny";
-        let passphrase = "";
-        let to = "FPYSXfvJ24mCk9f8bX8zgtWYKnvgf96upeSaNraEtuk9";
-        transfer(hash, phrase, passphrase, to, 100).unwrap();
+        let to = Pubkey::new_unique().to_string();
+        transfer(BLOCKHASH, PHRASE, PASSPHRASE, &to, 100).unwrap();
     }
 }

@@ -219,76 +219,52 @@ mod test {
     use super::*;
     use wasm_bindgen_test::*;
 
+    static BLOCKHASH : &str = "3r1DbHt5RtsQfdDMyLaeBkoQqMcn3m4S4kDLFj4YHvae";
+    static PHRASE : &str = "plunge bitter method anchor slogan talent draft obscure mimic hover ordinary tiny";
+    static PASSPHRASE : &str = "";
+
     #[wasm_bindgen_test]
     fn test_create_stake_account() {
-        let hash = "3r1DbHt5RtsQfdDMyLaeBkoQqMcn3m4S4kDLFj4YHvae";
-        let phrase =
-            "plunge bitter method anchor slogan talent draft obscure mimic hover ordinary tiny";
-        let passphrase = "";
-        create_stake_account(hash, phrase, passphrase, 100).unwrap();
+        create_stake_account(BLOCKHASH, PHRASE, PASSPHRASE, 100).unwrap();
     }
 
     #[wasm_bindgen_test]
     fn test_delegate_stake() {
-        let hash = "3r1DbHt5RtsQfdDMyLaeBkoQqMcn3m4S4kDLFj4YHvae";
-        let phrase =
-            "plunge bitter method anchor slogan talent draft obscure mimic hover ordinary tiny";
-        let passphrase = "";
         let stake_account = Pubkey::new_unique().to_string();
         let validator = Pubkey::new_unique().to_string();
-        delegate_stake(hash, phrase, passphrase, &stake_account, &validator).unwrap();
+        delegate_stake(BLOCKHASH, PHRASE, PASSPHRASE, &stake_account, &validator).unwrap();
     }
 
     #[wasm_bindgen_test]
     fn test_deactivate_stake() {
-        let hash = "3r1DbHt5RtsQfdDMyLaeBkoQqMcn3m4S4kDLFj4YHvae";
-        let phrase =
-            "plunge bitter method anchor slogan talent draft obscure mimic hover ordinary tiny";
-        let passphrase = "";
         let stake_account = Pubkey::new_unique().to_string();
-        deactivate_stake(hash, phrase, passphrase, &stake_account).unwrap();
+        deactivate_stake(BLOCKHASH, PHRASE, PASSPHRASE, &stake_account).unwrap();
     }
 
     #[wasm_bindgen_test]
     fn test_withdraw_stake() {
-        let hash = "3r1DbHt5RtsQfdDMyLaeBkoQqMcn3m4S4kDLFj4YHvae";
-        let phrase =
-            "plunge bitter method anchor slogan talent draft obscure mimic hover ordinary tiny";
-        let passphrase = "";
         let stake_account = Pubkey::new_unique().to_string();
-        withdraw_stake(hash, phrase, passphrase, &stake_account, 100).unwrap();
+        withdraw_stake(BLOCKHASH, PHRASE, PASSPHRASE, &stake_account, 100).unwrap();
     }
 
     #[wasm_bindgen_test]
     fn test_merge_stake() {
-        let hash = "3r1DbHt5RtsQfdDMyLaeBkoQqMcn3m4S4kDLFj4YHvae";
-        let phrase =
-            "plunge bitter method anchor slogan talent draft obscure mimic hover ordinary tiny";
-        let passphrase = "";
         let source = Pubkey::new_unique().to_string();
         let destination = Pubkey::new_unique().to_string();
-        merge_stake(hash, phrase, passphrase, &source, &destination).unwrap();
+        merge_stake(BLOCKHASH, PHRASE, PASSPHRASE, &source, &destination).unwrap();
     }
     #[wasm_bindgen_test]
     fn test_split_stake() {
-        let hash = "3r1DbHt5RtsQfdDMyLaeBkoQqMcn3m4S4kDLFj4YHvae";
-        let phrase =
-            "plunge bitter method anchor slogan talent draft obscure mimic hover ordinary tiny";
-        let passphrase = "";
         let source = Pubkey::new_unique().to_string();
-        split_stake(hash, phrase, passphrase, &source, 100).unwrap();
+        split_stake(BLOCKHASH, PHRASE, PASSPHRASE, &source, 100).unwrap();
     }
     #[wasm_bindgen_test]
     fn test_authorize_stake() {
-        let hash = "3r1DbHt5RtsQfdDMyLaeBkoQqMcn3m4S4kDLFj4YHvae";
-        let phrase =
-            "plunge bitter method anchor slogan talent draft obscure mimic hover ordinary tiny";
-        let passphrase = "";
         let source = Pubkey::new_unique().to_string();
         let new_authority = Pubkey::new_unique().to_string();
         let mut authorize_type = StakeAuthorizeInput::Staker;
-        authorize_stake(hash, phrase, passphrase, &source, &new_authority, authorize_type).unwrap();
+        authorize_stake(BLOCKHASH, PHRASE, PASSPHRASE, &source, &new_authority, authorize_type).unwrap();
         authorize_type = StakeAuthorizeInput::Withdrawer;
-        authorize_stake(hash, phrase, passphrase, &source, &new_authority, authorize_type).unwrap();
+        authorize_stake(BLOCKHASH, PHRASE, PASSPHRASE, &source, &new_authority, authorize_type).unwrap();
     }
 }
