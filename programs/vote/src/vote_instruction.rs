@@ -14,6 +14,7 @@ use solana_metrics::inc_new_counter_info;
 
 use solana_sdk::{
     decode_error::DecodeError,
+    feature_set,
     hash::Hash,
     instruction::{AccountMeta, Instruction, InstructionError},
     keyed_account::{from_keyed_account, get_signers, next_keyed_account, KeyedAccount},
@@ -281,7 +282,7 @@ pub fn process_instruction(
     _program_id: &Pubkey,
     keyed_accounts: &[KeyedAccount],
     data: &[u8],
-    _invoke_context: &mut dyn InvokeContext,
+    invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
     trace!("process_instruction: {:?}", data);
     trace!("keyed_accounts: {:?}", keyed_accounts);
@@ -299,6 +300,7 @@ pub fn process_instruction(
                 &vote_init,
                 &signers,
                 &from_keyed_account::<Clock>(next_keyed_account(keyed_accounts)?)?,
+                invoke_context.is_feature_active(&feature_set::check_init_vote_data::id()),
             )
         }
         VoteInstruction::Authorize(voter_pubkey, vote_authorize) => vote_state::authorize(

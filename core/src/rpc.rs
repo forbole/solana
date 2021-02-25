@@ -3,6 +3,7 @@
 use crate::{
     cluster_info::ClusterInfo,
     contact_info::ContactInfo,
+    max_slots::MaxSlots,
     non_circulating_supply::calculate_non_circulating_supply,
     optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
     rpc_health::*,
@@ -28,7 +29,7 @@ use solana_client::{
     rpc_request::{
         TokenAccountsFilter, DELINQUENT_VALIDATOR_SLOT_DISTANCE, MAX_GET_CONFIRMED_BLOCKS_RANGE,
         MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS2_LIMIT,
-        MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS_SLOT_RANGE,
+        MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS_SLOT_RANGE, MAX_GET_PROGRAM_ACCOUNT_FILTERS,
         MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS, MAX_MULTIPLE_ACCOUNTS, NUM_LARGEST_ACCOUNTS,
     },
     rpc_response::Response as RpcResponse,
@@ -138,6 +139,7 @@ pub struct JsonRpcRequestProcessor {
     bigtable_ledger_storage: Option<solana_storage_bigtable::LedgerStorage>,
     optimistically_confirmed_bank: Arc<RwLock<OptimisticallyConfirmedBank>>,
     largest_accounts_cache: Arc<RwLock<LargestAccountsCache>>,
+    max_slots: Arc<MaxSlots>,
 }
 impl Metadata for JsonRpcRequestProcessor {}
 
@@ -221,6 +223,7 @@ impl JsonRpcRequestProcessor {
         bigtable_ledger_storage: Option<solana_storage_bigtable::LedgerStorage>,
         optimistically_confirmed_bank: Arc<RwLock<OptimisticallyConfirmedBank>>,
         largest_accounts_cache: Arc<RwLock<LargestAccountsCache>>,
+        max_slots: Arc<MaxSlots>,
     ) -> (Self, Receiver<TransactionInfo>) {
         let (sender, receiver) = channel();
         (
@@ -239,6 +242,7 @@ impl JsonRpcRequestProcessor {
                 bigtable_ledger_storage,
                 optimistically_confirmed_bank,
                 largest_accounts_cache,
+                max_slots,
             },
             receiver,
         )
@@ -279,6 +283,7 @@ impl JsonRpcRequestProcessor {
                 bank: bank.clone(),
             })),
             largest_accounts_cache: Arc::new(RwLock::new(LargestAccountsCache::new(30))),
+            max_slots: Arc::new(MaxSlots::default()),
         }
     }
 
@@ -483,6 +488,14 @@ impl JsonRpcRequestProcessor {
 
     fn get_slot(&self, commitment: Option<CommitmentConfig>) -> Slot {
         self.bank(commitment).slot()
+    }
+
+    fn get_max_retransmit_slot(&self) -> Slot {
+        self.max_slots.retransmit.load(Ordering::Relaxed)
+    }
+
+    fn get_max_shred_insert_slot(&self) -> Slot {
+        self.max_slots.shred_insert.load(Ordering::Relaxed)
     }
 
     fn get_slot_leader(&self, commitment: Option<CommitmentConfig>) -> String {
@@ -1915,6 +1928,12 @@ pub trait RpcSol {
     #[rpc(meta, name = "getSlot")]
     fn get_slot(&self, meta: Self::Metadata, commitment: Option<CommitmentConfig>) -> Result<Slot>;
 
+    #[rpc(meta, name = "getMaxRetransmitSlot")]
+    fn get_max_retransmit_slot(&self, meta: Self::Metadata) -> Result<Slot>;
+
+    #[rpc(meta, name = "getMaxShredInsertSlot")]
+    fn get_max_shred_insert_slot(&self, meta: Self::Metadata) -> Result<Slot>;
+
     #[rpc(meta, name = "getTransactionCount")]
     fn get_transaction_count(
         &self,
@@ -2223,6 +2242,12 @@ impl RpcSol for RpcSolImpl {
         } else {
             (None, vec![])
         };
+        if filters.len() > MAX_GET_PROGRAM_ACCOUNT_FILTERS {
+            return Err(Error::invalid_params(format!(
+                "Too many filters provided; max {}",
+                MAX_GET_PROGRAM_ACCOUNT_FILTERS
+            )));
+        }
         for filter in &filters {
             verify_filter(filter)?;
         }
@@ -2380,15 +2405,23 @@ impl RpcSol for RpcSolImpl {
         Ok(
             solana_ledger::leader_schedule_utils::leader_schedule(epoch, &bank).map(
                 |leader_schedule| {
-                    let mut map = HashMap::new();
+                    let mut leader_schedule_by_identity = HashMap::new();
 
-                    for (slot_index, pubkey) in
+                    for (slot_index, identity_pubkey) in
                         leader_schedule.get_slot_leaders().iter().enumerate()
                     {
-                        let pubkey = pubkey.to_string();
-                        map.entry(pubkey).or_insert_with(Vec::new).push(slot_index);
+                        leader_schedule_by_identity
+                            .entry(identity_pubkey)
+                            .or_insert_with(Vec::new)
+                            .push(slot_index);
                     }
-                    map
+
+                    leader_schedule_by_identity
+                        .into_iter()
+                        .map(|(identity_pubkey, slot_indices)| {
+                            (identity_pubkey.to_string(), slot_indices)
+                        })
+                        .collect()
                 },
             ),
         )
@@ -2497,6 +2530,16 @@ impl RpcSol for RpcSolImpl {
     fn get_slot(&self, meta: Self::Metadata, commitment: Option<CommitmentConfig>) -> Result<Slot> {
         debug!("get_slot rpc request received");
         Ok(meta.get_slot(commitment))
+    }
+
+    fn get_max_retransmit_slot(&self, meta: Self::Metadata) -> Result<Slot> {
+        debug!("get_max_retransmit_slot rpc request received");
+        Ok(meta.get_max_retransmit_slot())
+    }
+
+    fn get_max_shred_insert_slot(&self, meta: Self::Metadata) -> Result<Slot> {
+        debug!("get_max_shred_insert_slot rpc request received");
+        Ok(meta.get_max_shred_insert_slot())
     }
 
     fn get_transaction_count(
@@ -3200,6 +3243,10 @@ pub mod tests {
             .write_perf_sample(0, &sample1)
             .expect("write to blockstore");
 
+        let max_slots = Arc::new(MaxSlots::default());
+        max_slots.retransmit.store(42, Ordering::Relaxed);
+        max_slots.shred_insert.store(43, Ordering::Relaxed);
+
         let (meta, receiver) = JsonRpcRequestProcessor::new(
             JsonRpcConfig {
                 enable_rpc_transaction_history: true,
@@ -3218,6 +3265,7 @@ pub mod tests {
             None,
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
             Arc::new(RwLock::new(LargestAccountsCache::new(30))),
+            max_slots,
         );
         SendTransactionService::new(tpu_address, &bank_forks, None, receiver, 1000, 1);
 
@@ -4628,6 +4676,7 @@ pub mod tests {
             None,
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
             Arc::new(RwLock::new(LargestAccountsCache::new(30))),
+            Arc::new(MaxSlots::default()),
         );
         SendTransactionService::new(tpu_address, &bank_forks, None, receiver, 1000, 1);
 
@@ -4825,6 +4874,7 @@ pub mod tests {
             None,
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
             Arc::new(RwLock::new(LargestAccountsCache::new(30))),
+            Arc::new(MaxSlots::default()),
         );
         SendTransactionService::new(tpu_address, &bank_forks, None, receiver, 1000, 1);
         assert_eq!(request_processor.validator_exit(), false);
@@ -4859,6 +4909,7 @@ pub mod tests {
             None,
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
             Arc::new(RwLock::new(LargestAccountsCache::new(30))),
+            Arc::new(MaxSlots::default()),
         );
         SendTransactionService::new(tpu_address, &bank_forks, None, receiver, 1000, 1);
         assert_eq!(request_processor.validator_exit(), true);
@@ -4884,6 +4935,24 @@ pub mod tests {
         let result: Response = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         assert_eq!(expected, result);
+    }
+
+    fn test_basic_slot(method: &str, expected: Slot) {
+        let bob_pubkey = solana_sdk::pubkey::new_rand();
+        let RpcHandler { io, meta, .. } = start_rpc_handler_with_tx(&bob_pubkey);
+
+        let req = format!("{{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"{}\"}}", method);
+        let res = io.handle_request_sync(&req, meta);
+
+        let json: Value = serde_json::from_str(&res.unwrap()).unwrap();
+        let slot: Slot = serde_json::from_value(json["result"].clone()).unwrap();
+        assert_eq!(slot, expected);
+    }
+
+    #[test]
+    fn test_rpc_get_max_slots() {
+        test_basic_slot("getMaxRetransmitSlot", 42);
+        test_basic_slot("getMaxShredInsertSlot", 43);
     }
 
     #[test]
@@ -4952,6 +5021,7 @@ pub mod tests {
             None,
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
             Arc::new(RwLock::new(LargestAccountsCache::new(30))),
+            Arc::new(MaxSlots::default()),
         );
         SendTransactionService::new(tpu_address, &bank_forks, None, receiver, 1000, 1);
         assert_eq!(
@@ -6182,6 +6252,7 @@ pub mod tests {
             None,
             optimistically_confirmed_bank.clone(),
             Arc::new(RwLock::new(LargestAccountsCache::new(30))),
+            Arc::new(MaxSlots::default()),
         );
 
         let mut io = MetaIoHandler::default();
