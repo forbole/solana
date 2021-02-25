@@ -20,6 +20,17 @@ pub enum AuthorityTypeInput {
     CloseAccount,
 }
 
+impl AuthorityTypeInput {
+    fn into(&self) -> AuthorityType {
+        match self {
+            AuthorityTypeInput::MintTokens => AuthorityType::MintTokens,
+            AuthorityTypeInput::FreezeAccount => AuthorityType::FreezeAccount,
+            AuthorityTypeInput::AccountOwner => AuthorityType::AccountOwner,
+            AuthorityTypeInput::CloseAccount => AuthorityType::CloseAccount,
+        }
+    }
+}
+
 #[wasm_bindgen(js_name = "createToken")]
 pub fn create_token(
     blockhash: &str,
@@ -283,12 +294,7 @@ pub fn set_spl_authority(
         Ok(pubkey) => Some(pubkey),
         Err(_) => None,
     };
-    let authority_type = match spl_authorize {
-        AuthorityTypeInput::MintTokens => AuthorityType::MintTokens,
-        AuthorityTypeInput::FreezeAccount => AuthorityType::FreezeAccount,
-        AuthorityTypeInput::AccountOwner => AuthorityType::AccountOwner,
-        AuthorityTypeInput::CloseAccount => AuthorityType::CloseAccount,
-    };
+    let authority_type = AuthorityTypeInput::into(&spl_authorize);
     let instructions = vec![
         jserr!(spl_token_instruction::set_authority(
             &spl_token::id(),

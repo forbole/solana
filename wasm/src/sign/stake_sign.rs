@@ -16,6 +16,15 @@ pub enum StakeAuthorizeInput {
     Withdrawer,
 }
 
+impl StakeAuthorizeInput {
+    fn into(&self) -> StakeAuthorize {
+        match self {
+            StakeAuthorizeInput::Staker => StakeAuthorize::Staker,
+            StakeAuthorizeInput::Withdrawer => StakeAuthorize::Withdrawer,
+        }
+    }
+}
+
 #[wasm_bindgen(js_name = "createStakeAccount")]
 pub fn create_stake_account(
     blockhash: &str,
@@ -196,10 +205,7 @@ pub fn authorize_stake(
     let authority_pubkey = authority_keypair.pubkey();
     let source_pubkey = jserr!(Pubkey::from_str(source));
     let new_authoriy_pubkey = jserr!(Pubkey::from_str(new_authority));
-    let stake_authorize = match authorize_type {
-        StakeAuthorizeInput::Staker => StakeAuthorize::Staker,
-        StakeAuthorizeInput::Withdrawer => StakeAuthorize::Withdrawer,
-    };
+    let stake_authorize = StakeAuthorizeInput::into(&authorize_type);
     let instructions = vec![stake_instruction::authorize(
         &source_pubkey,
         &authority_pubkey,
