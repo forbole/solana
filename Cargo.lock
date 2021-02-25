@@ -404,12 +404,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "476e9cd489f9e121e02ffa6014a8ef220ecb15c05ed23fc34cca13925dc283fb"
 
 [[package]]
-name = "bs58"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "771fe0050b883fcc3ea2359b1a96bcfbc090b7116eae7c3c512c7a083fdf23d3"
-
-[[package]]
 name = "bstr"
 version = "0.2.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1536,7 +1530,7 @@ dependencies = [
  "arc-swap 1.2.0",
  "futures 0.3.8",
  "log 0.4.11",
- "reqwest 0.11.0",
+ "reqwest 0.11.1",
  "serde",
  "serde_derive",
  "serde_json",
@@ -2169,9 +2163,9 @@ checksum = "b294d6fa9ee409a054354afc4352b0b9ef7ca222c69b8812cbea9e7d2bf3783f"
 
 [[package]]
 name = "libc"
-version = "0.2.81"
+version = "0.2.86"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1482821306169ec4d07f6aca392a4681f66c75c9918aa49641a2595db64053cb"
+checksum = "b7282d924be3275cec7f6756ff4121987bc6481325397dde6ba3e7802b1a8b1c"
 
 [[package]]
 name = "libloading"
@@ -3441,9 +3435,9 @@ dependencies = [
 
 [[package]]
 name = "reqwest"
-version = "0.11.0"
+version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fd281b1030aa675fb90aa994d07187645bb3c8fc756ca766e7c3070b439de9de"
+checksum = "0460542b551950620a3648c6aa23318ac6b3cd779114bd873209e6e8b5eb1c34"
 dependencies = [
  "base64 0.13.0",
  "bytes 1.0.1",
@@ -3967,7 +3961,7 @@ dependencies = [
  "Inflector",
  "base64 0.12.3",
  "bincode",
- "bs58 0.3.1",
+ "bs58",
  "bv",
  "lazy_static",
  "serde",
@@ -3977,7 +3971,7 @@ dependencies = [
  "solana-sdk 1.6.0",
  "solana-stake-program 1.6.0",
  "solana-vote-program 1.6.0",
- "spl-token 3.0.1",
+ "spl-token 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "thiserror",
  "zstd",
 ]
@@ -4204,7 +4198,7 @@ version = "1.6.0"
 dependencies = [
  "Inflector",
  "bincode",
- "bs58 0.3.1",
+ "bs58",
  "chrono",
  "clap",
  "console",
@@ -4284,7 +4278,7 @@ dependencies = [
  "assert_matches",
  "base64 0.13.0",
  "bincode",
- "bs58 0.3.1",
+ "bs58",
  "clap",
  "indicatif",
  "jsonrpc-core",
@@ -4345,7 +4339,7 @@ dependencies = [
  "ahash 0.6.1",
  "base64 0.12.3",
  "bincode",
- "bs58 0.3.1",
+ "bs58",
  "bv",
  "byteorder",
  "chrono",
@@ -4409,8 +4403,8 @@ dependencies = [
  "solana-sys-tuner",
  "solana-transaction-status",
  "solana-version",
- "solana-vote-program",
- "spl-token",
+ "solana-vote-program 1.6.0",
+ "spl-token 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "symlink",
  "systemstat",
  "tempfile",
@@ -4550,7 +4544,7 @@ version = "1.5.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dc44c8096d5847d8cf7f3af3cce565de554cb56371decf93b060633ca8588913"
 dependencies = [
- "bs58 0.3.1",
+ "bs58",
  "bv",
  "generic-array 0.14.3",
  "log 0.4.11",
@@ -4558,7 +4552,7 @@ dependencies = [
  "rustc_version",
  "serde",
  "serde_derive",
- "sha2 0.9.2",
+ "sha2 0.9.3",
  "solana-frozen-abi-macro 1.5.8",
  "solana-logger 1.5.8",
  "thiserror",
@@ -4569,7 +4563,7 @@ name = "solana-frozen-abi"
 version = "1.6.0"
 source = "git+https://github.com/forbole/solana?branch=wasm#3b4de8cbf6401fa4d9a7e415bb3bf4c2b9321b1f"
 dependencies = [
- "bs58 0.3.1",
+ "bs58",
  "bv",
  "generic-array 0.14.3",
  "log 0.4.11",
@@ -4587,7 +4581,7 @@ dependencies = [
 name = "solana-frozen-abi"
 version = "1.6.0"
 dependencies = [
- "bs58 0.3.1",
+ "bs58",
  "bv",
  "generic-array 0.14.3",
  "log 0.4.11",
@@ -4713,7 +4707,7 @@ dependencies = [
 name = "solana-keygen"
 version = "1.6.0"
 dependencies = [
- "bs58 0.3.1",
+ "bs58",
  "clap",
  "dirs-next",
  "num_cpus",
@@ -4785,7 +4779,7 @@ name = "solana-ledger-tool"
 version = "1.6.0"
 dependencies = [
  "assert_cmd",
- "bs58 0.3.1",
+ "bs58",
  "bytecount",
  "clap",
  "csv",
@@ -5053,7 +5047,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2007bf285617f8a783e96b20ccd2f8d813549090a5b520f22e5f65b3cd9b157"
 dependencies = [
  "bincode",
- "bs58 0.3.1",
+ "bs58",
  "bv",
  "curve25519-dalek 2.1.0",
  "hex",
@@ -5068,7 +5062,7 @@ dependencies = [
  "serde",
  "serde_bytes",
  "serde_derive",
- "sha2 0.9.2",
+ "sha2 0.9.3",
  "solana-frozen-abi 1.5.8",
  "solana-frozen-abi-macro 1.5.8",
  "solana-logger 1.5.8",
@@ -5082,7 +5076,7 @@ version = "1.6.0"
 source = "git+https://github.com/forbole/solana?branch=wasm#3b4de8cbf6401fa4d9a7e415bb3bf4c2b9321b1f"
 dependencies = [
  "bincode",
- "bs58 0.3.1",
+ "bs58",
  "bv",
  "curve25519-dalek 2.1.0",
  "hex",
@@ -5113,7 +5107,7 @@ dependencies = [
  "bincode",
  "borsh",
  "borsh-derive",
- "bs58 0.3.1",
+ "bs58",
  "bv",
  "curve25519-dalek 2.1.0",
  "hex",
@@ -5274,7 +5268,7 @@ source = "git+https://github.com/forbole/solana?branch=wasm#833aeff1b7eafb9494b9
 dependencies = [
  "assert_matches",
  "bincode",
- "bs58 0.3.1",
+ "bs58",
  "bv",
  "byteorder",
  "chrono",
@@ -5317,7 +5311,7 @@ version = "1.6.0"
 dependencies = [
  "assert_matches",
  "bincode",
- "bs58 0.3.1",
+ "bs58",
  "bv",
  "byteorder",
  "chrono",
@@ -5362,7 +5356,7 @@ version = "1.5.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b8a6635f1798c8ff1b88bb0fad1d4693c011f36a73c9ae03f198203144edcabb"
 dependencies = [
- "bs58 0.3.1",
+ "bs58",
  "proc-macro2 1.0.24",
  "quote 1.0.6",
  "rustversion",
@@ -5374,7 +5368,7 @@ name = "solana-sdk-macro"
 version = "1.6.0"
 source = "git+https://github.com/forbole/solana?branch=wasm#3b4de8cbf6401fa4d9a7e415bb3bf4c2b9321b1f"
 dependencies = [
- "bs58 0.3.1",
+ "bs58",
  "proc-macro2 1.0.24",
  "quote 1.0.6",
  "rustversion",
@@ -5385,7 +5379,7 @@ dependencies = [
 name = "solana-sdk-macro"
 version = "1.6.0"
 dependencies = [
- "bs58 0.3.1",
+ "bs58",
  "proc-macro2 1.0.24",
  "quote 1.0.6",
  "rustversion",
@@ -5538,7 +5532,7 @@ name = "solana-storage-proto"
 version = "1.6.0"
 dependencies = [
  "bincode",
- "bs58 0.3.1",
+ "bs58",
  "prost",
  "serde",
  "serde_derive",
@@ -5620,7 +5614,7 @@ dependencies = [
  "solana-transaction-status",
  "solana-version",
  "spl-associated-token-account",
- "spl-token 3.0.1",
+ "spl-token 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "tempfile",
  "thiserror",
 ]
@@ -5632,7 +5626,7 @@ dependencies = [
  "Inflector",
  "base64 0.12.3",
  "bincode",
- "bs58 0.3.1",
+ "bs58",
  "lazy_static",
  "serde",
  "serde_derive",
@@ -5644,7 +5638,7 @@ dependencies = [
  "solana-vote-program 1.6.0",
  "spl-memo 2.0.1",
  "spl-memo 3.0.0",
- "spl-token 3.0.1",
+ "spl-token 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "thiserror",
 ]
 
@@ -5769,14 +5763,13 @@ version = "0.1.0"
 dependencies = [
  "base64 0.13.0",
  "bincode",
- "bs58 0.4.0",
  "hex-literal",
  "rand 0.7.3",
  "serde",
  "solana-program 1.6.0 (git+https://github.com/forbole/solana?branch=wasm)",
  "solana-sdk 1.6.0 (git+https://github.com/forbole/solana?branch=wasm)",
  "solana-stake-program 1.6.0 (git+https://github.com/forbole/solana?branch=wasm)",
- "spl-token 3.1.0",
+ "spl-token 3.1.0 (git+https://github.com/forbole/solana-program-library?branch=wasm)",
  "tiny-bip39 0.8.0",
  "wasm-bindgen",
  "wasm-bindgen-test",
@@ -5832,7 +5825,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4adc47eebe5d2b662cbaaba1843719c28a67e5ec5d0460bc3ca60900a51f74e2"
 dependencies = [
  "solana-program 1.5.8",
- "spl-token",
+ "spl-token 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -5856,6 +5849,19 @@ dependencies = [
 [[package]]
 name = "spl-token"
 version = "3.1.0"
+source = "git+https://github.com/forbole/solana-program-library?branch=wasm#1dd5b564709fb90ea104036a9736837cc543fb3b"
+dependencies = [
+ "arrayref",
+ "num-derive",
+ "num-traits",
+ "num_enum",
+ "solana-program 1.6.0 (git+https://github.com/forbole/solana?branch=wasm)",
+ "thiserror",
+]
+
+[[package]]
+name = "spl-token"
+version = "3.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b795e50d15dfd35aa5460b80a16414503a322be115a417a43db987c5824c6798"
 dependencies = [
@@ -5864,19 +5870,6 @@ dependencies = [
  "num-traits",
  "num_enum",
  "solana-program 1.5.8",
- "thiserror",
-]
-
-[[package]]
-name = "spl-token"
-version = "3.1.0"
-source = "git+https://github.com/forbole/solana-program-library?branch=wasm#1dd5b564709fb90ea104036a9736837cc543fb3b"
-dependencies = [
- "arrayref",
- "num-derive",
- "num-traits",
- "num_enum",
- "solana-program 1.6.0 (git+https://github.com/forbole/solana?branch=wasm)",
  "thiserror",
 ]
 
