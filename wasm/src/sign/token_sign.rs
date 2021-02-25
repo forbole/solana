@@ -295,16 +295,101 @@ pub fn set_spl_authority(
         Err(_) => None,
     };
     let authority_type = AuthorityTypeInput::into(&spl_authorize);
-    let instructions = vec![
-        jserr!(spl_token_instruction::set_authority(
-            &spl_token::id(),
-            &source_pubkey,
-            new_authoriy_pubkey.as_ref(),
-            authority_type,
-            &authority_pubkey,
-            &[],
-        ))
-    ];
+    let instructions = vec![jserr!(spl_token_instruction::set_authority(
+        &spl_token::id(),
+        &source_pubkey,
+        new_authoriy_pubkey.as_ref(),
+        authority_type,
+        &authority_pubkey,
+        &[],
+    ))];
+    let signers = [&authority_keypair];
+    let encoded = jserr!(generate_encoded_transaction(
+        blockhash,
+        &instructions,
+        &authority_pubkey,
+        &signers
+    ));
+    Ok(encoded)
+}
+
+#[wasm_bindgen(js_name = "freezeTokenAcount")]
+pub fn freeze_token_account(
+    blockhash: &str,
+    phrase: &str,
+    passphrase: &str,
+    mint: &str,
+    token_account: &str,
+) -> Result<String, JsValue> {
+    let authority_keypair = jserr!(keypair_from_seed_phrase_and_passphrase(phrase, passphrase));
+    let authority_pubkey = authority_keypair.pubkey();
+    let mint_pubkey = jserr!(Pubkey::from_str(mint));
+    let token_account_pubkey = jserr!(Pubkey::from_str(token_account));
+    let instructions = vec![jserr!(spl_token_instruction::freeze_account(
+        &spl_token::id(),
+        &token_account_pubkey,
+        &mint_pubkey,
+        &authority_pubkey,
+        &[]
+    ))];
+    let signers = [&authority_keypair];
+    let encoded = jserr!(generate_encoded_transaction(
+        blockhash,
+        &instructions,
+        &authority_pubkey,
+        &signers
+    ));
+    Ok(encoded)
+}
+
+#[wasm_bindgen(js_name = "thawTokenAcount")]
+pub fn thaw_token_account(
+    blockhash: &str,
+    phrase: &str,
+    passphrase: &str,
+    mint: &str,
+    token_account: &str,
+) -> Result<String, JsValue> {
+    let authority_keypair = jserr!(keypair_from_seed_phrase_and_passphrase(phrase, passphrase));
+    let authority_pubkey = authority_keypair.pubkey();
+    let mint_pubkey = jserr!(Pubkey::from_str(mint));
+    let token_account_pubkey = jserr!(Pubkey::from_str(token_account));
+    let instructions = vec![jserr!(spl_token_instruction::thaw_account(
+        &spl_token::id(),
+        &token_account_pubkey,
+        &mint_pubkey,
+        &authority_pubkey,
+        &[]
+    ))];
+    let signers = [&authority_keypair];
+    let encoded = jserr!(generate_encoded_transaction(
+        blockhash,
+        &instructions,
+        &authority_pubkey,
+        &signers
+    ));
+    Ok(encoded)
+}
+
+#[wasm_bindgen(js_name = "closeTokenAcount")]
+pub fn close_token_account(
+    blockhash: &str,
+    phrase: &str,
+    passphrase: &str,
+    token_account: &str,
+    destination: &str,
+) -> Result<String, JsValue> {
+    let authority_keypair = jserr!(keypair_from_seed_phrase_and_passphrase(phrase, passphrase));
+    let authority_pubkey = authority_keypair.pubkey();
+    let destination_pubkey = jserr!(Pubkey::from_str(destination));
+    let token_account_pubkey = jserr!(Pubkey::from_str(token_account));
+    let instructions = vec![jserr!(spl_token_instruction::thaw_account(
+        &spl_token::id(),
+        &token_account_pubkey,
+        &destination_pubkey,
+        &authority_pubkey,
+        &[]
+    ))];
     let signers = [&authority_keypair];
     let encoded = jserr!(generate_encoded_transaction(
         blockhash,
@@ -386,13 +471,71 @@ mod test {
         revoke_token(BLOCKHASH, PHRASE, PASSPHRASE, &source).unwrap();
     }
     #[wasm_bindgen_test]
-    fn test_set_spl_authority(){
+    fn test_set_spl_authority() {
         let source = Pubkey::new_unique().to_string();
         let new_authority = Pubkey::new_unique().to_string();
-        set_spl_authority(BLOCKHASH, PHRASE, PASSPHRASE, &source, &new_authority, AuthorityTypeInput::MintTokens).unwrap();
-        set_spl_authority(BLOCKHASH, PHRASE, PASSPHRASE, &source, &new_authority, AuthorityTypeInput::AccountOwner).unwrap();
-        set_spl_authority(BLOCKHASH, PHRASE, PASSPHRASE, &source, &new_authority, AuthorityTypeInput::FreezeAccount).unwrap();
-        set_spl_authority(BLOCKHASH, PHRASE, PASSPHRASE, &source, &new_authority, AuthorityTypeInput::CloseAccount).unwrap();
-        set_spl_authority(BLOCKHASH, PHRASE, PASSPHRASE, &source, "", AuthorityTypeInput::MintTokens).unwrap();
+        set_spl_authority(
+            BLOCKHASH,
+            PHRASE,
+            PASSPHRASE,
+            &source,
+            &new_authority,
+            AuthorityTypeInput::MintTokens,
+        )
+        .unwrap();
+        set_spl_authority(
+            BLOCKHASH,
+            PHRASE,
+            PASSPHRASE,
+            &source,
+            &new_authority,
+            AuthorityTypeInput::AccountOwner,
+        )
+        .unwrap();
+        set_spl_authority(
+            BLOCKHASH,
+            PHRASE,
+            PASSPHRASE,
+            &source,
+            &new_authority,
+            AuthorityTypeInput::FreezeAccount,
+        )
+        .unwrap();
+        set_spl_authority(
+            BLOCKHASH,
+            PHRASE,
+            PASSPHRASE,
+            &source,
+            &new_authority,
+            AuthorityTypeInput::CloseAccount,
+        )
+        .unwrap();
+        set_spl_authority(
+            BLOCKHASH,
+            PHRASE,
+            PASSPHRASE,
+            &source,
+            "",
+            AuthorityTypeInput::MintTokens,
+        )
+        .unwrap();
+    }
+    #[wasm_bindgen_test]
+    fn test_freeze_token_account(){
+        let mint = Pubkey::new_unique().to_string();
+        let token_account = Pubkey::new_unique().to_string();
+        freeze_token_account(BLOCKHASH, PHRASE, PASSPHRASE, &mint, &token_account).unwrap();
+    }
+    #[wasm_bindgen_test]
+    fn test_thaw_token_account(){
+        let mint = Pubkey::new_unique().to_string();
+        let token_account = Pubkey::new_unique().to_string();
+        thaw_token_account(BLOCKHASH, PHRASE, PASSPHRASE, &mint, &token_account).unwrap();
+    }
+    #[wasm_bindgen_test]
+    fn test_close_token_account(){
+        let destination = Pubkey::new_unique().to_string();
+        let token_account = Pubkey::new_unique().to_string();
+        close_token_account(BLOCKHASH, PHRASE, PASSPHRASE, &token_account, &destination).unwrap();
     }
 }
