@@ -57,7 +57,7 @@ impl SignerConfig {
 
     #[wasm_bindgen(setter)]
     pub fn set_blockhash(&mut self, bockhash: &str) {
-        self.bockhash = bockhash.to_string();
+        self.blockhash = bockhash.to_string();
     }
 
     #[wasm_bindgen(getter)]
@@ -66,8 +66,8 @@ impl SignerConfig {
     }
 
     #[wasm_bindgen(setter)]
-    pub fn set_nonce(&mut self, nonce: &str) {
-        self.nonce = nonce.to_string();
+    pub fn set_nonce(&mut self, nonce: Option<String>) {
+        self.nonce = nonce;
     }
 
     #[wasm_bindgen(getter)]
@@ -76,8 +76,8 @@ impl SignerConfig {
     }
 
     #[wasm_bindgen(setter)]
-    pub fn set_seed(&mut self, seed: &str) {
-        self.seed = seed.to_string();
+    pub fn set_seed(&mut self, seed: Option<String>) {
+        self.seed = seed;
     }
 }
 
