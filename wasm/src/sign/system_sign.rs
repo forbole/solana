@@ -130,24 +130,24 @@ mod test {
     static PASSPHRASE: &str = "";
     #[wasm_bindgen_test]
     fn test_transfer() {
-        let config = SignerConfig::new(BLOCKHASH, PHRASE, PASSPHRASE, None, None);
+        let config = SignerConfig::new(BLOCKHASH, PHRASE, PASSPHRASE, None);
         let to = Pubkey::new_unique().to_string();
         transfer(&config, &to, 100).unwrap();
     }
     #[wasm_bindgen_test]
     fn test_create_nonce_account() {
-        let config = SignerConfig::new(BLOCKHASH, PHRASE, PASSPHRASE, None, None);
+        let config = SignerConfig::new(BLOCKHASH, PHRASE, PASSPHRASE, None);
         create_nonce_account(&config, 100).unwrap();
     }
     #[wasm_bindgen_test]
     fn test_withdraw_nonce() {
-        let config = SignerConfig::new(BLOCKHASH, PHRASE, PASSPHRASE, None, None);
+        let config = SignerConfig::new(BLOCKHASH, PHRASE, PASSPHRASE, None);
         let nonce = Pubkey::new_unique().to_string();
         withdraw_nonce(&config, &nonce, 100).unwrap();
     }
     #[wasm_bindgen_test]
     fn test_authorize_nonce() {
-        let config = SignerConfig::new(BLOCKHASH, PHRASE, PASSPHRASE, None, None);
+        let config = SignerConfig::new(BLOCKHASH, PHRASE, PASSPHRASE, None);
         let nonce = Pubkey::new_unique().to_string();
         let new_authority = Pubkey::new_unique().to_string();
         authorize_nonce(&config, &nonce, &new_authority).unwrap();

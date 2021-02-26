@@ -9,7 +9,6 @@ pub struct SignerConfig {
     phrase: String,
     passphrase: String,
     nonce: Option<String>,
-    seed: Option<String>,
 }
 
 #[wasm_bindgen(skip)]
@@ -20,14 +19,12 @@ impl SignerConfig {
         phrase: &str,
         passphrase: &str,
         nonce: Option<String>,
-        seed: Option<String>,
     ) -> SignerConfig {
         SignerConfig {
             blockhash: blockhash.to_string(),
             phrase: phrase.to_string(),
             passphrase: passphrase.to_string(),
             nonce: nonce,
-            seed: seed,
         }
     }
     #[wasm_bindgen(getter)]
@@ -68,16 +65,6 @@ impl SignerConfig {
     #[wasm_bindgen(setter)]
     pub fn set_nonce(&mut self, nonce: Option<String>) {
         self.nonce = nonce;
-    }
-
-    #[wasm_bindgen(getter)]
-    pub fn seed(&self) -> Option<String> {
-        self.seed.clone()
-    }
-
-    #[wasm_bindgen(setter)]
-    pub fn set_seed(&mut self, seed: Option<String>) {
-        self.seed = seed;
     }
 }
 

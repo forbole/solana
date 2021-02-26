@@ -30,7 +30,11 @@ impl StakeAuthorizeInput {
 }
 
 #[wasm_bindgen(js_name = "createStakeAccount")]
-pub fn create_stake_account(config: &SignerConfig, lamports: u32) -> Result<JsValue, JsValue> {
+pub fn create_stake_account(
+    config: &SignerConfig,
+    lamports: u32,
+    seed: Option<String>,
+) -> Result<JsValue, JsValue> {
     let authority_keypair = jserr!(keypair_from_seed_phrase_and_passphrase(
         &config.phrase().as_ref(),
         &config.passphrase().as_ref(),
@@ -43,8 +47,8 @@ pub fn create_stake_account(config: &SignerConfig, lamports: u32) -> Result<JsVa
         withdrawer: authority_pubkey,
     };
     let lockup = Lockup::default();
-    let instructions = match config.seed() {
-        Some(seed) => stake_instruction::create_account_with_seed(
+    let instructions = match seed {
+        Some(ref seed) => stake_instruction::create_account_with_seed(
             &authority_pubkey,
             &jserr!(Pubkey::create_with_seed(
                 &authority_pubkey,
@@ -65,9 +69,9 @@ pub fn create_stake_account(config: &SignerConfig, lamports: u32) -> Result<JsVa
             lamports as u64,
         ),
     };
-    let signers = match config.seed() {
-            Some(_) => vec![&authority_keypair], 
-            None => vec![&authority_keypair, &stake_keypair],
+    let signers = match seed {
+        Some(_) => vec![&authority_keypair],
+        None => vec![&authority_keypair, &stake_keypair],
     };
     let encoded = jserr!(generate_encoded_transaction(
         &config,
@@ -184,7 +188,12 @@ pub fn merge_stake(
 }
 
 #[wasm_bindgen(js_name = "splitStake")]
-pub fn split_stake(config: &SignerConfig, source: &str, lamports: u32) -> Result<JsValue, JsValue> {
+pub fn split_stake(
+    config: &SignerConfig,
+    source: &str,
+    lamports: u32,
+    seed: Option<String>,
+) -> Result<JsValue, JsValue> {
     let authority_keypair = jserr!(keypair_from_seed_phrase_and_passphrase(
         &config.phrase().as_ref(),
         &config.passphrase().as_ref(),
@@ -193,8 +202,8 @@ pub fn split_stake(config: &SignerConfig, source: &str, lamports: u32) -> Result
     let source_pubkey = jserr!(Pubkey::from_str(source));
     let split_keypair = Keypair::new();
     let split_pubkey = split_keypair.pubkey();
-    let instructions = match config.seed() {
-        Some(seed) => stake_instruction::split_with_seed(
+    let instructions = match seed {
+        Some(ref seed) => stake_instruction::split_with_seed(
             &source_pubkey,
             &authority_pubkey,
             lamports as u64,
@@ -264,20 +273,20 @@ mod test {
 
     #[wasm_bindgen_test]
     fn test_create_stake_account() {
-        let config = SignerConfig::new(BLOCKHASH, PHRASE, PASSPHRASE, None, None);
-        create_stake_account(&config, 100).unwrap();
+        let config = SignerConfig::new(BLOCKHASH, PHRASE, PASSPHRASE, None);
+        create_stake_account(&config, 100, None).unwrap();
     }
 
     #[wasm_bindgen_test]
     fn test_create_stake_account_with_seed() {
         let config =
-            SignerConfig::new(BLOCKHASH, PHRASE, PASSPHRASE, None, Some("123".to_string()));
-        create_stake_account(&config, 100).unwrap();
+            SignerConfig::new(BLOCKHASH, PHRASE, PASSPHRASE, None);
+        create_stake_account(&config, 100, Some("1".to_string())).unwrap();
     }
 
     #[wasm_bindgen_test]
     fn test_delegate_stake() {
-        let config = SignerConfig::new(BLOCKHASH, PHRASE, PASSPHRASE, None, None);
+        let config = SignerConfig::new(BLOCKHASH, PHRASE, PASSPHRASE, None);
         let stake_account = Pubkey::new_unique().to_string();
         let validator = Pubkey::new_unique().to_string();
         delegate_stake(&config, &stake_account, &validator).unwrap();
@@ -285,40 +294,40 @@ mod test {
 
     #[wasm_bindgen_test]
     fn test_deactivate_stake() {
-        let config = SignerConfig::new(BLOCKHASH, PHRASE, PASSPHRASE, None, None);
+        let config = SignerConfig::new(BLOCKHASH, PHRASE, PASSPHRASE, None);
         let stake_account = Pubkey::new_unique().to_string();
         deactivate_stake(&config, &stake_account).unwrap();
     }
 
     #[wasm_bindgen_test]
     fn test_withdraw_stake() {
-        let config = SignerConfig::new(BLOCKHASH, PHRASE, PASSPHRASE, None, None);
+        let config = SignerConfig::new(BLOCKHASH, PHRASE, PASSPHRASE, None);
         let stake_account = Pubkey::new_unique().to_string();
         withdraw_stake(&config, &stake_account, 100).unwrap();
     }
 
     #[wasm_bindgen_test]
     fn test_merge_stake() {
-        let config = SignerConfig::new(BLOCKHASH, PHRASE, PASSPHRASE, None, None);
+        let config = SignerConfig::new(BLOCKHASH, PHRASE, PASSPHRASE, None);
         let source = Pubkey::new_unique().to_string();
         let destination = Pubkey::new_unique().to_string();
         merge_stake(&config, &source, &destination).unwrap();
     }
     #[wasm_bindgen_test]
     fn test_split_stake() {
-        let config = SignerConfig::new(BLOCKHASH, PHRASE, PASSPHRASE, None, None);
+        let config = SignerConfig::new(BLOCKHASH, PHRASE, PASSPHRASE, None);
         let source = Pubkey::new_unique().to_string();
-        split_stake(&config, &source, 100).unwrap();
+        split_stake(&config, &source, 100, None).unwrap();
     }
     #[wasm_bindgen_test]
     fn test_split_stake_with_seed() {
-        let config = SignerConfig::new(BLOCKHASH, PHRASE, PASSPHRASE, None, Some("1".to_string()));
+        let config = SignerConfig::new(BLOCKHASH, PHRASE, PASSPHRASE, None);
         let source = Pubkey::new_unique().to_string();
-        split_stake(&config, &source, 100).unwrap();
+        split_stake(&config, &source, 100, Some("1".to_string())).unwrap();
     }
     #[wasm_bindgen_test]
     fn test_authorize_stake() {
-        let config = SignerConfig::new(BLOCKHASH, PHRASE, PASSPHRASE, None, None);
+        let config = SignerConfig::new(BLOCKHASH, PHRASE, PASSPHRASE, None);
         let source = Pubkey::new_unique().to_string();
         let new_authority = Pubkey::new_unique().to_string();
         let mut authorize_type = StakeAuthorizeInput::Staker;

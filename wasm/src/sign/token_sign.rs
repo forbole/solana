@@ -423,32 +423,32 @@ mod test {
 
     #[wasm_bindgen_test]
     fn test_create_token() {
-        let config = SignerConfig::new(BLOCKHASH, PHRASE, PASSPHRASE, None, None);
+        let config = SignerConfig::new(BLOCKHASH, PHRASE, PASSPHRASE, None);
         create_token(&config, 9, false).unwrap();
     }
     #[wasm_bindgen_test]
     fn test_mint_token() {
-        let config = SignerConfig::new(BLOCKHASH, PHRASE, PASSPHRASE, None, None);
+        let config = SignerConfig::new(BLOCKHASH, PHRASE, PASSPHRASE, None);
         let token = Pubkey::new_unique().to_string();
         let account = Pubkey::new_unique().to_string();
         mint_token(&config, &token, &account, 100, 6).unwrap();
     }
     #[wasm_bindgen_test]
     fn test_burn_token() {
-        let config = SignerConfig::new(BLOCKHASH, PHRASE, PASSPHRASE, None, None);
+        let config = SignerConfig::new(BLOCKHASH, PHRASE, PASSPHRASE, None);
         let token = Pubkey::new_unique().to_string();
         let account = Pubkey::new_unique().to_string();
         burn_token(&config, &token, &account, 100, 6).unwrap();
     }
     #[wasm_bindgen_test]
     fn test_create_token_account() {
-        let config = SignerConfig::new(BLOCKHASH, PHRASE, PASSPHRASE, None, None);
+        let config = SignerConfig::new(BLOCKHASH, PHRASE, PASSPHRASE, None);
         let token = Pubkey::new_unique().to_string();
         create_token_account(&config, &token).unwrap();
     }
     #[wasm_bindgen_test]
     fn test_transfer_token() {
-        let config = SignerConfig::new(BLOCKHASH, PHRASE, PASSPHRASE, None, None);
+        let config = SignerConfig::new(BLOCKHASH, PHRASE, PASSPHRASE, None);
         let source = Pubkey::new_unique().to_string();
         let token = Pubkey::new_unique().to_string();
         let destination = Pubkey::new_unique().to_string();
@@ -464,7 +464,7 @@ mod test {
     }
     #[wasm_bindgen_test]
     fn test_approve_token() {
-        let config = SignerConfig::new(BLOCKHASH, PHRASE, PASSPHRASE, None, None);
+        let config = SignerConfig::new(BLOCKHASH, PHRASE, PASSPHRASE, None);
         let source = Pubkey::new_unique().to_string();
         let token = Pubkey::new_unique().to_string();
         let destination = Pubkey::new_unique().to_string();
@@ -480,13 +480,13 @@ mod test {
     }
     #[wasm_bindgen_test]
     fn test_revoke_token() {
-        let config = SignerConfig::new(BLOCKHASH, PHRASE, PASSPHRASE, None, None);
+        let config = SignerConfig::new(BLOCKHASH, PHRASE, PASSPHRASE, None);
         let source = Pubkey::new_unique().to_string();
         revoke_token(&config, &source).unwrap();
     }
     #[wasm_bindgen_test]
     fn test_set_spl_authority() {
-        let config = SignerConfig::new(BLOCKHASH, PHRASE, PASSPHRASE, None, None);
+        let config = SignerConfig::new(BLOCKHASH, PHRASE, PASSPHRASE, None);
         let source = Pubkey::new_unique().to_string();
         let new_authority = Pubkey::new_unique().to_string();
         set_spl_authority(
@@ -527,21 +527,21 @@ mod test {
     }
     #[wasm_bindgen_test]
     fn test_freeze_token_account(){
-        let config = SignerConfig::new(BLOCKHASH, PHRASE, PASSPHRASE, None, None);
+        let config = SignerConfig::new(BLOCKHASH, PHRASE, PASSPHRASE, None);
         let mint = Pubkey::new_unique().to_string();
         let token_account = Pubkey::new_unique().to_string();
         freeze_token_account(&config, &mint, &token_account).unwrap();
     }
     #[wasm_bindgen_test]
     fn test_thaw_token_account(){
-        let config = SignerConfig::new(BLOCKHASH, PHRASE, PASSPHRASE, None, None);
+        let config = SignerConfig::new(BLOCKHASH, PHRASE, PASSPHRASE, None);
         let mint = Pubkey::new_unique().to_string();
         let token_account = Pubkey::new_unique().to_string();
         thaw_token_account(&config, &mint, &token_account).unwrap();
     }
     #[wasm_bindgen_test]
     fn test_close_token_account(){
-        let config = SignerConfig::new(BLOCKHASH, PHRASE, PASSPHRASE, None, None);
+        let config = SignerConfig::new(BLOCKHASH, PHRASE, PASSPHRASE, None);
         let destination = Pubkey::new_unique().to_string();
         let token_account = Pubkey::new_unique().to_string();
         close_token_account(&config, &token_account, &destination).unwrap();

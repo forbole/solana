@@ -48,13 +48,13 @@ mod test {
     use crate::sign::system_sign::transfer;
 
     #[wasm_bindgen_test]
-    fn test_nonce() {
+    fn test_transaction_with_nonce() {
         let blockhash: &str = "3r1DbHt5RtsQfdDMyLaeBkoQqMcn3m4S4kDLFj4YHvae";
         let phrase: &str =
             "plunge bitter method anchor slogan talent draft obscure mimic hover ordinary tiny";
         let passhprase: &str = "";
         let nonce = Some(String::from(Pubkey::new_unique().to_string()));
-        let config = SignerConfig::new(blockhash, phrase, passhprase, nonce, None);
+        let config = SignerConfig::new(blockhash, phrase, passhprase, nonce);
         let to = Pubkey::new_unique().to_string();
         transfer(&config, &to, 100).unwrap();
     }
