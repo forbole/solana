@@ -1,4 +1,4 @@
-use crate::{jserr, sign::generate_encoded_transaction, types::PubkeyAndEncodedTransaction};
+use crate::{jserr, sign::generate_encoded_transaction, types::{PubkeyAndEncodedTransaction, SignerConfig}};
 use solana_program::{program_pack::Pack, rent::Rent, system_instruction};
 use solana_sdk::{
     pubkey::Pubkey,
@@ -33,13 +33,14 @@ impl AuthorityTypeInput {
 
 #[wasm_bindgen(js_name = "createToken")]
 pub fn create_token(
-    blockhash: &str,
-    phrase: &str,
-    passphrase: &str,
+    config: &SignerConfig,
     decimals: u8,
     enable_freeze: bool,
 ) -> Result<JsValue, JsValue> {
-    let authority_keypair = jserr!(keypair_from_seed_phrase_and_passphrase(phrase, passphrase));
+   let authority_keypair = jserr!(keypair_from_seed_phrase_and_passphrase(
+        &config.phrase().as_ref(),
+        &config.passphrase().as_ref(),
+    ));
     let authority_pubkey = authority_keypair.pubkey();
     let token_keypair = Keypair::new();
     let token_pubkey = token_keypair.pubkey();
@@ -66,7 +67,7 @@ pub fn create_token(
     ];
     let signers = [&authority_keypair, &token_keypair];
     let encoded = jserr!(generate_encoded_transaction(
-        blockhash,
+        &config,
         &instructions,
         &authority_pubkey,
         &signers
@@ -77,15 +78,16 @@ pub fn create_token(
 
 #[wasm_bindgen(js_name = "mintToken")]
 pub fn mint_token(
-    blockhash: &str,
-    phrase: &str,
-    passphrase: &str,
+    config: &SignerConfig,
     token: &str,
     recipient: &str,
     amount: u32,
     decimals: u8,
 ) -> Result<String, JsValue> {
-    let authority_keypair = jserr!(keypair_from_seed_phrase_and_passphrase(phrase, passphrase));
+   let authority_keypair = jserr!(keypair_from_seed_phrase_and_passphrase(
+        &config.phrase().as_ref(),
+        &config.passphrase().as_ref(),
+    ));
     let authority_pubkey = authority_keypair.pubkey();
     let token_pubkey = jserr!(Pubkey::from_str(token));
     let recipient_pubkey = jserr!(Pubkey::from_str(recipient));
@@ -100,7 +102,7 @@ pub fn mint_token(
     ))];
     let signers = [&authority_keypair];
     let encoded = jserr!(generate_encoded_transaction(
-        blockhash,
+        &config,
         &instructions,
         &authority_pubkey,
         &signers
@@ -110,15 +112,16 @@ pub fn mint_token(
 
 #[wasm_bindgen(js_name = "burnToken")]
 pub fn burn_token(
-    blockhash: &str,
-    phrase: &str,
-    passphrase: &str,
+    config: &SignerConfig,
     mint: &str,
     token_account: &str,
     amount: u32,
     decimals: u8,
 ) -> Result<String, JsValue> {
-    let authority_keypair = jserr!(keypair_from_seed_phrase_and_passphrase(phrase, passphrase));
+   let authority_keypair = jserr!(keypair_from_seed_phrase_and_passphrase(
+        &config.phrase().as_ref(),
+        &config.passphrase().as_ref(),
+    ));
     let authority_pubkey = authority_keypair.pubkey();
     let token_account_pubkey = jserr!(Pubkey::from_str(token_account));
     let mint_pubkey = jserr!(Pubkey::from_str(mint));
@@ -133,7 +136,7 @@ pub fn burn_token(
     ))];
     let signers = [&authority_keypair];
     let encoded = jserr!(generate_encoded_transaction(
-        blockhash,
+        &config,
         &instructions,
         &authority_pubkey,
         &signers
@@ -143,12 +146,13 @@ pub fn burn_token(
 
 #[wasm_bindgen(js_name = "createTokenAccount")]
 pub fn create_token_account(
-    blockhash: &str,
-    phrase: &str,
-    passphrase: &str,
+    config: &SignerConfig,
     mint: &str,
 ) -> Result<JsValue, JsValue> {
-    let authority_keypair = jserr!(keypair_from_seed_phrase_and_passphrase(phrase, passphrase));
+   let authority_keypair = jserr!(keypair_from_seed_phrase_and_passphrase(
+        &config.phrase().as_ref(),
+        &config.passphrase().as_ref(),
+    ));
     let authority_pubkey = authority_keypair.pubkey();
     let mint_pubkey = jserr!(Pubkey::from_str(mint));
     let account_keypair = Keypair::new();
@@ -170,7 +174,7 @@ pub fn create_token_account(
     ];
     let signers = [&authority_keypair, &account_keypair];
     let encoded = jserr!(generate_encoded_transaction(
-        blockhash,
+        &config,
         &instructions,
         &authority_pubkey,
         &signers
@@ -181,16 +185,17 @@ pub fn create_token_account(
 
 #[wasm_bindgen(js_name = "transferToken")]
 pub fn transfer_token(
-    blockhash: &str,
-    phrase: &str,
-    passphrase: &str,
+    config: &SignerConfig,
     mint: &str,
     source: &str,
     destination: &str,
     amount: u32,
     decimals: u8,
 ) -> Result<String, JsValue> {
-    let authority_keypair = jserr!(keypair_from_seed_phrase_and_passphrase(phrase, passphrase));
+   let authority_keypair = jserr!(keypair_from_seed_phrase_and_passphrase(
+        &config.phrase().as_ref(),
+        &config.passphrase().as_ref(),
+    ));
     let authority_pubkey = authority_keypair.pubkey();
     let source_pubkey = jserr!(Pubkey::from_str(source));
     let mint_pubkey = jserr!(Pubkey::from_str(mint));
@@ -207,7 +212,7 @@ pub fn transfer_token(
     ))];
     let signers = [&authority_keypair];
     let encoded = jserr!(generate_encoded_transaction(
-        blockhash,
+        &config,
         &instructions,
         &authority_pubkey,
         &signers
@@ -217,16 +222,17 @@ pub fn transfer_token(
 
 #[wasm_bindgen(js_name = "approveToken")]
 pub fn approve_token(
-    blockhash: &str,
-    phrase: &str,
-    passphrase: &str,
+    config: &SignerConfig,
     mint: &str,
     source: &str,
     destination: &str,
     amount: u32,
     decimals: u8,
 ) -> Result<String, JsValue> {
-    let authority_keypair = jserr!(keypair_from_seed_phrase_and_passphrase(phrase, passphrase));
+   let authority_keypair = jserr!(keypair_from_seed_phrase_and_passphrase(
+        &config.phrase().as_ref(),
+        &config.passphrase().as_ref(),
+    ));
     let authority_pubkey = authority_keypair.pubkey();
     let mint_pubkey = jserr!(Pubkey::from_str(mint));
     let source_pubkey = jserr!(Pubkey::from_str(source));
@@ -243,7 +249,7 @@ pub fn approve_token(
     ))];
     let signers = [&authority_keypair];
     let encoded = jserr!(generate_encoded_transaction(
-        blockhash,
+        &config,
         &instructions,
         &authority_pubkey,
         &signers
@@ -253,12 +259,13 @@ pub fn approve_token(
 
 #[wasm_bindgen(js_name = "revokeToken")]
 pub fn revoke_token(
-    blockhash: &str,
-    phrase: &str,
-    passphrase: &str,
+    config: &SignerConfig,
     source: &str,
 ) -> Result<String, JsValue> {
-    let authority_keypair = jserr!(keypair_from_seed_phrase_and_passphrase(phrase, passphrase));
+   let authority_keypair = jserr!(keypair_from_seed_phrase_and_passphrase(
+        &config.phrase().as_ref(),
+        &config.passphrase().as_ref(),
+    ));
     let authority_pubkey = authority_keypair.pubkey();
     let source_pubkey = jserr!(Pubkey::from_str(source));
     let instructions = vec![jserr!(spl_token_instruction::revoke(
@@ -269,7 +276,7 @@ pub fn revoke_token(
     ))];
     let signers = [&authority_keypair];
     let encoded = jserr!(generate_encoded_transaction(
-        blockhash,
+        &config,
         &instructions,
         &authority_pubkey,
         &signers
@@ -279,14 +286,15 @@ pub fn revoke_token(
 
 #[wasm_bindgen(js_name = "setSplAuthority")]
 pub fn set_spl_authority(
-    blockhash: &str,
-    phrase: &str,
-    passphrase: &str,
+    config: &SignerConfig,
     source: &str,
     new_authority: &str,
     spl_authorize: AuthorityTypeInput,
 ) -> Result<String, JsValue> {
-    let authority_keypair = jserr!(keypair_from_seed_phrase_and_passphrase(phrase, passphrase));
+   let authority_keypair = jserr!(keypair_from_seed_phrase_and_passphrase(
+        &config.phrase().as_ref(),
+        &config.passphrase().as_ref(),
+    ));
     let authority_pubkey = authority_keypair.pubkey();
     let source_pubkey = jserr!(Pubkey::from_str(source));
     // spl token authority can be none
@@ -305,7 +313,7 @@ pub fn set_spl_authority(
     ))];
     let signers = [&authority_keypair];
     let encoded = jserr!(generate_encoded_transaction(
-        blockhash,
+        &config,
         &instructions,
         &authority_pubkey,
         &signers
@@ -315,13 +323,14 @@ pub fn set_spl_authority(
 
 #[wasm_bindgen(js_name = "freezeTokenAcount")]
 pub fn freeze_token_account(
-    blockhash: &str,
-    phrase: &str,
-    passphrase: &str,
+    config: &SignerConfig,
     mint: &str,
     token_account: &str,
 ) -> Result<String, JsValue> {
-    let authority_keypair = jserr!(keypair_from_seed_phrase_and_passphrase(phrase, passphrase));
+   let authority_keypair = jserr!(keypair_from_seed_phrase_and_passphrase(
+        &config.phrase().as_ref(),
+        &config.passphrase().as_ref(),
+    ));
     let authority_pubkey = authority_keypair.pubkey();
     let mint_pubkey = jserr!(Pubkey::from_str(mint));
     let token_account_pubkey = jserr!(Pubkey::from_str(token_account));
@@ -334,7 +343,7 @@ pub fn freeze_token_account(
     ))];
     let signers = [&authority_keypair];
     let encoded = jserr!(generate_encoded_transaction(
-        blockhash,
+        &config,
         &instructions,
         &authority_pubkey,
         &signers
@@ -344,13 +353,14 @@ pub fn freeze_token_account(
 
 #[wasm_bindgen(js_name = "thawTokenAcount")]
 pub fn thaw_token_account(
-    blockhash: &str,
-    phrase: &str,
-    passphrase: &str,
+    config: &SignerConfig,
     mint: &str,
     token_account: &str,
 ) -> Result<String, JsValue> {
-    let authority_keypair = jserr!(keypair_from_seed_phrase_and_passphrase(phrase, passphrase));
+   let authority_keypair = jserr!(keypair_from_seed_phrase_and_passphrase(
+        &config.phrase().as_ref(),
+        &config.passphrase().as_ref(),
+    ));
     let authority_pubkey = authority_keypair.pubkey();
     let mint_pubkey = jserr!(Pubkey::from_str(mint));
     let token_account_pubkey = jserr!(Pubkey::from_str(token_account));
@@ -363,7 +373,7 @@ pub fn thaw_token_account(
     ))];
     let signers = [&authority_keypair];
     let encoded = jserr!(generate_encoded_transaction(
-        blockhash,
+        &config,
         &instructions,
         &authority_pubkey,
         &signers
@@ -373,13 +383,14 @@ pub fn thaw_token_account(
 
 #[wasm_bindgen(js_name = "closeTokenAcount")]
 pub fn close_token_account(
-    blockhash: &str,
-    phrase: &str,
-    passphrase: &str,
+    config: &SignerConfig,
     token_account: &str,
     destination: &str,
 ) -> Result<String, JsValue> {
-    let authority_keypair = jserr!(keypair_from_seed_phrase_and_passphrase(phrase, passphrase));
+   let authority_keypair = jserr!(keypair_from_seed_phrase_and_passphrase(
+        &config.phrase().as_ref(),
+        &config.passphrase().as_ref(),
+    ));
     let authority_pubkey = authority_keypair.pubkey();
     let destination_pubkey = jserr!(Pubkey::from_str(destination));
     let token_account_pubkey = jserr!(Pubkey::from_str(token_account));
@@ -392,7 +403,7 @@ pub fn close_token_account(
     ))];
     let signers = [&authority_keypair];
     let encoded = jserr!(generate_encoded_transaction(
-        blockhash,
+        &config,
         &instructions,
         &authority_pubkey,
         &signers
@@ -412,34 +423,37 @@ mod test {
 
     #[wasm_bindgen_test]
     fn test_create_token() {
-        create_token(BLOCKHASH, PHRASE, PASSPHRASE, 9, false).unwrap();
+        let config = SignerConfig::new(BLOCKHASH, PHRASE, PASSPHRASE, None, None);
+        create_token(&config, 9, false).unwrap();
     }
     #[wasm_bindgen_test]
     fn test_mint_token() {
+        let config = SignerConfig::new(BLOCKHASH, PHRASE, PASSPHRASE, None, None);
         let token = Pubkey::new_unique().to_string();
         let account = Pubkey::new_unique().to_string();
-        mint_token(BLOCKHASH, PHRASE, PASSPHRASE, &token, &account, 100, 6).unwrap();
+        mint_token(&config, &token, &account, 100, 6).unwrap();
     }
     #[wasm_bindgen_test]
     fn test_burn_token() {
+        let config = SignerConfig::new(BLOCKHASH, PHRASE, PASSPHRASE, None, None);
         let token = Pubkey::new_unique().to_string();
         let account = Pubkey::new_unique().to_string();
-        burn_token(BLOCKHASH, PHRASE, PASSPHRASE, &token, &account, 100, 6).unwrap();
+        burn_token(&config, &token, &account, 100, 6).unwrap();
     }
     #[wasm_bindgen_test]
     fn test_create_token_account() {
+        let config = SignerConfig::new(BLOCKHASH, PHRASE, PASSPHRASE, None, None);
         let token = Pubkey::new_unique().to_string();
-        create_token_account(BLOCKHASH, PHRASE, PASSPHRASE, &token).unwrap();
+        create_token_account(&config, &token).unwrap();
     }
     #[wasm_bindgen_test]
     fn test_transfer_token() {
+        let config = SignerConfig::new(BLOCKHASH, PHRASE, PASSPHRASE, None, None);
         let source = Pubkey::new_unique().to_string();
         let token = Pubkey::new_unique().to_string();
         let destination = Pubkey::new_unique().to_string();
         transfer_token(
-            BLOCKHASH,
-            PHRASE,
-            PASSPHRASE,
+            &config,
             &token,
             &source,
             &destination,
@@ -450,13 +464,12 @@ mod test {
     }
     #[wasm_bindgen_test]
     fn test_approve_token() {
+        let config = SignerConfig::new(BLOCKHASH, PHRASE, PASSPHRASE, None, None);
         let source = Pubkey::new_unique().to_string();
         let token = Pubkey::new_unique().to_string();
         let destination = Pubkey::new_unique().to_string();
         approve_token(
-            BLOCKHASH,
-            PHRASE,
-            PASSPHRASE,
+            &config,
             &token,
             &source,
             &destination,
@@ -467,53 +480,45 @@ mod test {
     }
     #[wasm_bindgen_test]
     fn test_revoke_token() {
+        let config = SignerConfig::new(BLOCKHASH, PHRASE, PASSPHRASE, None, None);
         let source = Pubkey::new_unique().to_string();
-        revoke_token(BLOCKHASH, PHRASE, PASSPHRASE, &source).unwrap();
+        revoke_token(&config, &source).unwrap();
     }
     #[wasm_bindgen_test]
     fn test_set_spl_authority() {
+        let config = SignerConfig::new(BLOCKHASH, PHRASE, PASSPHRASE, None, None);
         let source = Pubkey::new_unique().to_string();
         let new_authority = Pubkey::new_unique().to_string();
         set_spl_authority(
-            BLOCKHASH,
-            PHRASE,
-            PASSPHRASE,
+            &config,
             &source,
             &new_authority,
             AuthorityTypeInput::MintTokens,
         )
         .unwrap();
         set_spl_authority(
-            BLOCKHASH,
-            PHRASE,
-            PASSPHRASE,
+            &config,
             &source,
             &new_authority,
             AuthorityTypeInput::AccountOwner,
         )
         .unwrap();
         set_spl_authority(
-            BLOCKHASH,
-            PHRASE,
-            PASSPHRASE,
+            &config,
             &source,
             &new_authority,
             AuthorityTypeInput::FreezeAccount,
         )
         .unwrap();
         set_spl_authority(
-            BLOCKHASH,
-            PHRASE,
-            PASSPHRASE,
+            &config,
             &source,
             &new_authority,
             AuthorityTypeInput::CloseAccount,
         )
         .unwrap();
         set_spl_authority(
-            BLOCKHASH,
-            PHRASE,
-            PASSPHRASE,
+            &config,
             &source,
             "",
             AuthorityTypeInput::MintTokens,
@@ -522,20 +527,23 @@ mod test {
     }
     #[wasm_bindgen_test]
     fn test_freeze_token_account(){
+        let config = SignerConfig::new(BLOCKHASH, PHRASE, PASSPHRASE, None, None);
         let mint = Pubkey::new_unique().to_string();
         let token_account = Pubkey::new_unique().to_string();
-        freeze_token_account(BLOCKHASH, PHRASE, PASSPHRASE, &mint, &token_account).unwrap();
+        freeze_token_account(&config, &mint, &token_account).unwrap();
     }
     #[wasm_bindgen_test]
     fn test_thaw_token_account(){
+        let config = SignerConfig::new(BLOCKHASH, PHRASE, PASSPHRASE, None, None);
         let mint = Pubkey::new_unique().to_string();
         let token_account = Pubkey::new_unique().to_string();
-        thaw_token_account(BLOCKHASH, PHRASE, PASSPHRASE, &mint, &token_account).unwrap();
+        thaw_token_account(&config, &mint, &token_account).unwrap();
     }
     #[wasm_bindgen_test]
     fn test_close_token_account(){
+        let config = SignerConfig::new(BLOCKHASH, PHRASE, PASSPHRASE, None, None);
         let destination = Pubkey::new_unique().to_string();
         let token_account = Pubkey::new_unique().to_string();
-        close_token_account(BLOCKHASH, PHRASE, PASSPHRASE, &token_account, &destination).unwrap();
+        close_token_account(&config, &token_account, &destination).unwrap();
     }
 }

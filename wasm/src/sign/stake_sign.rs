@@ -1,4 +1,4 @@
-use crate::{jserr, sign::generate_encoded_transaction, types::PubkeyAndEncodedTransaction};
+use crate::{jserr, sign::generate_encoded_transaction, types::{PubkeyAndEncodedTransaction, SignerConfig}};
 use solana_sdk::{
     pubkey::Pubkey,
     signature::{keypair_from_seed_phrase_and_passphrase, Keypair, Signer},
@@ -27,12 +27,13 @@ impl StakeAuthorizeInput {
 
 #[wasm_bindgen(js_name = "createStakeAccount")]
 pub fn create_stake_account(
-    blockhash: &str,
-    phrase: &str,
-    passphrase: &str,
+    config: &SignerConfig,
     lamports: u32,
 ) -> Result<JsValue, JsValue> {
-    let authority_keypair = jserr!(keypair_from_seed_phrase_and_passphrase(phrase, passphrase));
+   let authority_keypair = jserr!(keypair_from_seed_phrase_and_passphrase(
+        &config.phrase().as_ref(),
+        &config.passphrase().as_ref(),
+    ));
     let authority_pubkey = authority_keypair.pubkey();
     let stake_keypair = Keypair::new();
     let stake_pubkey = stake_keypair.pubkey();
@@ -50,7 +51,7 @@ pub fn create_stake_account(
     );
     let signers = [&authority_keypair, &stake_keypair];
     let encoded = jserr!(generate_encoded_transaction(
-        blockhash,
+        &config,
         &instructions,
         &authority_pubkey,
         &signers
@@ -61,13 +62,14 @@ pub fn create_stake_account(
 
 #[wasm_bindgen(js_name = "delegateStake")]
 pub fn delegate_stake(
-    blockhash: &str,
-    phrase: &str,
-    passphrase: &str,
+    config: &SignerConfig,
     stake_account: &str,
     validator: &str,
 ) -> Result<String, JsValue> {
-    let authority_keypair = jserr!(keypair_from_seed_phrase_and_passphrase(phrase, passphrase));
+   let authority_keypair = jserr!(keypair_from_seed_phrase_and_passphrase(
+        &config.phrase().as_ref(),
+        &config.passphrase().as_ref(),
+    ));
     let authority_pubkey = authority_keypair.pubkey();
     let stake_pubkey = jserr!(Pubkey::from_str(stake_account));
     let validator_pubkey = jserr!(Pubkey::from_str(validator));
@@ -78,7 +80,7 @@ pub fn delegate_stake(
     )];
     let signers = [&authority_keypair];
     let encoded = jserr!(generate_encoded_transaction(
-        blockhash,
+        &config,
         &instructions,
         &authority_pubkey,
         &signers
@@ -88,12 +90,13 @@ pub fn delegate_stake(
 
 #[wasm_bindgen(js_name = "deactivateStake")]
 pub fn deactivate_stake(
-    blockhash: &str,
-    phrase: &str,
-    passphrase: &str,
+    config: &SignerConfig,
     stake_account: &str,
 ) -> Result<String, JsValue> {
-    let authority_keypair = jserr!(keypair_from_seed_phrase_and_passphrase(phrase, passphrase));
+   let authority_keypair = jserr!(keypair_from_seed_phrase_and_passphrase(
+        &config.phrase().as_ref(),
+        &config.passphrase().as_ref(),
+    ));
     let authority_pubkey = authority_keypair.pubkey();
     let stake_pubkey = Pubkey::from_str(stake_account).unwrap();
     let instructions = vec![stake_instruction::deactivate_stake(
@@ -102,7 +105,7 @@ pub fn deactivate_stake(
     )];
     let signers = [&authority_keypair];
     let encoded = jserr!(generate_encoded_transaction(
-        blockhash,
+        &config,
         &instructions,
         &authority_pubkey,
         &signers
@@ -112,13 +115,14 @@ pub fn deactivate_stake(
 
 #[wasm_bindgen(js_name = "withdrawStake")]
 pub fn withdraw_stake(
-    blockhash: &str,
-    phrase: &str,
-    passphrase: &str,
+    config: &SignerConfig,
     stake_account: &str,
     lamports: u32,
 ) -> Result<String, JsValue> {
-    let authority_keypair = jserr!(keypair_from_seed_phrase_and_passphrase(phrase, passphrase));
+   let authority_keypair = jserr!(keypair_from_seed_phrase_and_passphrase(
+        &config.phrase().as_ref(),
+        &config.passphrase().as_ref(),
+    ));
     let authority_pubkey = authority_keypair.pubkey();
     let stake_pubkey = jserr!(Pubkey::from_str(stake_account));
     let instructions = vec![stake_instruction::withdraw(
@@ -130,7 +134,7 @@ pub fn withdraw_stake(
     )];
     let signers = [&authority_keypair];
     let encoded = jserr!(generate_encoded_transaction(
-        blockhash,
+        &config,
         &instructions,
         &authority_pubkey,
         &signers
@@ -140,13 +144,14 @@ pub fn withdraw_stake(
 
 #[wasm_bindgen(js_name = "mergeStake")]
 pub fn merge_stake(
-    blockhash: &str,
-    phrase: &str,
-    passphrase: &str,
+    config: &SignerConfig,
     source: &str,
     destination: &str,
 ) -> Result<String, JsValue> {
-    let authority_keypair = jserr!(keypair_from_seed_phrase_and_passphrase(phrase, passphrase));
+   let authority_keypair = jserr!(keypair_from_seed_phrase_and_passphrase(
+        &config.phrase().as_ref(),
+        &config.passphrase().as_ref(),
+    ));
     let authority_pubkey = authority_keypair.pubkey();
     let source_pubkey = jserr!(Pubkey::from_str(source));
     let destination_pubkey = jserr!(Pubkey::from_str(destination));
@@ -154,7 +159,7 @@ pub fn merge_stake(
         stake_instruction::merge(&destination_pubkey, &source_pubkey, &authority_pubkey);
     let signers = [&authority_keypair];
     let encoded = jserr!(generate_encoded_transaction(
-        blockhash,
+        &config,
         &instructions,
         &authority_pubkey,
         &signers
@@ -164,13 +169,14 @@ pub fn merge_stake(
 
 #[wasm_bindgen(js_name = "splitStake")]
 pub fn split_stake(
-    blockhash: &str,
-    phrase: &str,
-    passphrase: &str,
+    config: &SignerConfig,
     source: &str,
     lamports: u32,
 ) -> Result<JsValue, JsValue> {
-    let authority_keypair = jserr!(keypair_from_seed_phrase_and_passphrase(phrase, passphrase));
+   let authority_keypair = jserr!(keypair_from_seed_phrase_and_passphrase(
+        &config.phrase().as_ref(),
+        &config.passphrase().as_ref(),
+    ));
     let authority_pubkey = authority_keypair.pubkey();
     let source_pubkey = jserr!(Pubkey::from_str(source));
     let split_keypair = Keypair::new();
@@ -183,7 +189,7 @@ pub fn split_stake(
     );
     let signers = [&authority_keypair, &split_keypair];
     let encoded = jserr!(generate_encoded_transaction(
-        blockhash,
+        &config,
         &instructions,
         &authority_pubkey,
         &signers
@@ -194,14 +200,15 @@ pub fn split_stake(
 
 #[wasm_bindgen(js_name = "authorizeStake")]
 pub fn authorize_stake(
-    blockhash: &str,
-    phrase: &str,
-    passphrase: &str,
+    config: &SignerConfig,
     source: &str,
     new_authority: &str,
     authorize_type: StakeAuthorizeInput,
 ) -> Result<String, JsValue> {
-    let authority_keypair = jserr!(keypair_from_seed_phrase_and_passphrase(phrase, passphrase));
+   let authority_keypair = jserr!(keypair_from_seed_phrase_and_passphrase(
+        &config.phrase().as_ref(),
+        &config.passphrase().as_ref(),
+    ));
     let authority_pubkey = authority_keypair.pubkey();
     let source_pubkey = jserr!(Pubkey::from_str(source));
     let new_authoriy_pubkey = jserr!(Pubkey::from_str(new_authority));
@@ -215,7 +222,7 @@ pub fn authorize_stake(
     )];
     let signers = [&authority_keypair];
     let encoded = jserr!(generate_encoded_transaction(
-        blockhash,
+        &config,
         &instructions,
         &authority_pubkey,
         &signers
@@ -235,48 +242,53 @@ mod test {
 
     #[wasm_bindgen_test]
     fn test_create_stake_account() {
-        create_stake_account(BLOCKHASH, PHRASE, PASSPHRASE, 100).unwrap();
+        let config = SignerConfig::new(BLOCKHASH, PHRASE, PASSPHRASE, None, None);
+        create_stake_account(&config, 100).unwrap();
     }
 
     #[wasm_bindgen_test]
     fn test_delegate_stake() {
+        let config = SignerConfig::new(BLOCKHASH, PHRASE, PASSPHRASE, None, None);
         let stake_account = Pubkey::new_unique().to_string();
         let validator = Pubkey::new_unique().to_string();
-        delegate_stake(BLOCKHASH, PHRASE, PASSPHRASE, &stake_account, &validator).unwrap();
+        delegate_stake(&config, &stake_account, &validator).unwrap();
     }
 
     #[wasm_bindgen_test]
     fn test_deactivate_stake() {
+        let config = SignerConfig::new(BLOCKHASH, PHRASE, PASSPHRASE, None, None);
         let stake_account = Pubkey::new_unique().to_string();
-        deactivate_stake(BLOCKHASH, PHRASE, PASSPHRASE, &stake_account).unwrap();
+        deactivate_stake(&config, &stake_account).unwrap();
     }
 
     #[wasm_bindgen_test]
     fn test_withdraw_stake() {
+        let config = SignerConfig::new(BLOCKHASH, PHRASE, PASSPHRASE, None, None);
         let stake_account = Pubkey::new_unique().to_string();
-        withdraw_stake(BLOCKHASH, PHRASE, PASSPHRASE, &stake_account, 100).unwrap();
+        withdraw_stake(&config, &stake_account, 100).unwrap();
     }
 
     #[wasm_bindgen_test]
     fn test_merge_stake() {
+        let config = SignerConfig::new(BLOCKHASH, PHRASE, PASSPHRASE, None, None);
         let source = Pubkey::new_unique().to_string();
         let destination = Pubkey::new_unique().to_string();
-        merge_stake(BLOCKHASH, PHRASE, PASSPHRASE, &source, &destination).unwrap();
+        merge_stake(&config, &source, &destination).unwrap();
     }
     #[wasm_bindgen_test]
     fn test_split_stake() {
+        let config = SignerConfig::new(BLOCKHASH, PHRASE, PASSPHRASE, None, None);
         let source = Pubkey::new_unique().to_string();
-        split_stake(BLOCKHASH, PHRASE, PASSPHRASE, &source, 100).unwrap();
+        split_stake(&config, &source, 100).unwrap();
     }
     #[wasm_bindgen_test]
     fn test_authorize_stake() {
+        let config = SignerConfig::new(BLOCKHASH, PHRASE, PASSPHRASE, None, None);
         let source = Pubkey::new_unique().to_string();
         let new_authority = Pubkey::new_unique().to_string();
         let mut authorize_type = StakeAuthorizeInput::Staker;
         authorize_stake(
-            BLOCKHASH,
-            PHRASE,
-            PASSPHRASE,
+            &config,
             &source,
             &new_authority,
             authorize_type,
@@ -284,9 +296,7 @@ mod test {
         .unwrap();
         authorize_type = StakeAuthorizeInput::Withdrawer;
         authorize_stake(
-            BLOCKHASH,
-            PHRASE,
-            PASSPHRASE,
+            &config,
             &source,
             &new_authority,
             authorize_type,

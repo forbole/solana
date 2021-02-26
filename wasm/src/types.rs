@@ -4,6 +4,52 @@ use wasm_bindgen::prelude::*;
 #[wasm_bindgen]
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
+pub struct SignerConfig {
+    blockhash: String,
+    phrase: String,
+    passphrase: String,
+    nonce: Option<String>,
+    seed: Option<String>,
+}
+
+#[wasm_bindgen(skip)]
+impl SignerConfig {
+    #[wasm_bindgen(constructor)]
+    pub fn new(
+        blockhash: &str,
+        phrase: &str,
+        passphrase: &str,
+        nonce: Option<String>,
+        seed: Option<String>,
+    ) -> SignerConfig {
+        SignerConfig {
+            blockhash: blockhash.to_string(),
+            phrase: phrase.to_string(),
+            passphrase: passphrase.to_string(),
+            nonce: nonce,
+            seed: seed,
+        }
+    }
+    pub fn phrase(&self) -> String {
+        self.phrase.clone()
+    }
+    pub fn passphrase(&self) -> String {
+        self.passphrase.clone()
+    }
+    pub fn blockhash(&self) -> String {
+        self.blockhash.clone()
+    }
+    pub fn nonce(&self) -> Option<String> {
+        self.nonce.clone()
+    }
+    pub fn seed(&self) -> Option<String> {
+        self.seed.clone()
+    }
+}
+
+#[wasm_bindgen]
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct PubkeyAndPhrase {
     pubkey: String,
     phrase: String,
