@@ -30,20 +30,54 @@ impl SignerConfig {
             seed: seed,
         }
     }
+    #[wasm_bindgen(getter)]
     pub fn phrase(&self) -> String {
         self.phrase.clone()
     }
+
+    #[wasm_bindgen(setter)]
+    pub fn set_phrase(&mut self, phrase: &str) {
+        self.phrase = phrase.to_string();
+    }
+
+    #[wasm_bindgen(getter)]
     pub fn passphrase(&self) -> String {
         self.passphrase.clone()
     }
+
+    #[wasm_bindgen(setter)]
+    pub fn set_passhprase(&mut self, passphrase: &str) {
+        self.passphrase = passphrase.to_string();
+    }
+
+    #[wasm_bindgen(getter)]
     pub fn blockhash(&self) -> String {
         self.blockhash.clone()
     }
+
+    #[wasm_bindgen(setter)]
+    pub fn set_blockhash(&mut self, bockhash: &str) {
+        self.bockhash = bockhash.to_string();
+    }
+
+    #[wasm_bindgen(getter)]
     pub fn nonce(&self) -> Option<String> {
         self.nonce.clone()
     }
+
+    #[wasm_bindgen(setter)]
+    pub fn set_nonce(&mut self, nonce: &str) {
+        self.nonce = nonce.to_string();
+    }
+
+    #[wasm_bindgen(getter)]
     pub fn seed(&self) -> Option<String> {
         self.seed.clone()
+    }
+
+    #[wasm_bindgen(setter)]
+    pub fn set_seed(&mut self, seed: &str) {
+        self.seed = seed.to_string();
     }
 }
 
@@ -64,10 +98,12 @@ impl PubkeyAndPhrase {
             phrase: phrase.to_string(),
         }
     }
+
     #[wasm_bindgen(getter)]
     pub fn pubkey(&self) -> String {
         self.pubkey.clone()
     }
+
     #[wasm_bindgen(getter)]
     pub fn phrase(&self) -> String {
         self.phrase.clone()
@@ -95,6 +131,7 @@ impl PubkeyAndEncodedTransaction {
     pub fn pubkey(&self) -> String {
         self.pubkey.clone()
     }
+
     #[wasm_bindgen(getter)]
     pub fn encoded(&self) -> String {
         self.encoded.clone()
