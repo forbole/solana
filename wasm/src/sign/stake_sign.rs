@@ -47,11 +47,11 @@ pub fn create_stake_account(config: &SignerConfig, lamports: u32) -> Result<JsVa
         Some(seed) => stake_instruction::create_account_with_seed(
             &authority_pubkey,
             &jserr!(Pubkey::create_with_seed(
-                &stake_pubkey,
+                &authority_pubkey,
                 &seed,
                 &solana_stake_program::id()
             )),
-            &stake_pubkey,
+            &authority_pubkey,
             &seed,
             &authorized,
             &lockup,
@@ -65,7 +65,10 @@ pub fn create_stake_account(config: &SignerConfig, lamports: u32) -> Result<JsVa
             lamports as u64,
         ),
     };
-    let signers = [&authority_keypair, &stake_keypair];
+    let signers = match config.seed() {
+            Some(_) => vec![&authority_keypair], 
+            None => vec![&authority_keypair, &stake_keypair],
+    };
     let encoded = jserr!(generate_encoded_transaction(
         &config,
         &instructions,
