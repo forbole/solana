@@ -34,7 +34,17 @@ import {
   useTransactionStatus,
 } from "providers/transactions";
 import { Cluster, useCluster } from "providers/cluster";
+import { UpgradeableBpfLoaderDetailsCard } from "components/instruction/upgradeable-bpf-loader/UpgradeableBpfLoaderDetailsCard";
 import { VoteDetailsCard } from "components/instruction/vote/VoteDetailsCard";
+
+export type InstructionDetailsProps = {
+  tx: ParsedTransaction;
+  ix: ParsedInstruction;
+  index: number;
+  result: SignatureResult;
+  innerCards?: JSX.Element[];
+  childIndex?: number;
+};
 
 export function InstructionsSection({ signature }: SignatureProps) {
   const status = useTransactionStatus(signature);
@@ -162,6 +172,8 @@ function renderInstructionCard({
         return <TokenDetailsCard {...props} />;
       case "bpf-loader":
         return <BpfLoaderDetailsCard {...props} />;
+      case "bpf-upgradeable-loader":
+        return <UpgradeableBpfLoaderDetailsCard {...props} />;
       case "system":
         return <SystemDetailsCard {...props} />;
       case "stake":
@@ -169,29 +181,11 @@ function renderInstructionCard({
       case "spl-memo":
         return <MemoDetailsCard {...props} />;
       case "vote":
-        console.log(props);
         return <VoteDetailsCard {...props} />;
       default:
         return <UnknownDetailsCard {...props} />;
     }
   }
-
-  // TODO: There is a bug in web3, where inner instructions
-  // aren't getting coerced. This is a temporary fix.
-
-  if (typeof ix.programId === "string") {
-    ix.programId = new PublicKey(ix.programId);
-  }
-
-  ix.accounts = ix.accounts.map((account) => {
-    if (typeof account === "string") {
-      return new PublicKey(account);
-    }
-
-    return account;
-  });
-
-  // TODO: End hotfix
 
   const transactionIx = intoTransactionInstruction(tx, ix);
 

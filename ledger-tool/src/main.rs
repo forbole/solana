@@ -123,6 +123,7 @@ fn output_entry(
                     &transaction_status,
                     "      ",
                     None,
+                    None,
                 );
             }
         }
@@ -650,24 +651,23 @@ fn hardforks_of(matches: &ArgMatches<'_>, name: &str) -> Option<Vec<Slot>> {
 
 fn load_bank_forks(
     arg_matches: &ArgMatches,
-    ledger_path: &Path,
     genesis_config: &GenesisConfig,
+    blockstore: &Blockstore,
     process_options: ProcessOptions,
-    access_type: AccessType,
-    wal_recovery_mode: Option<BlockstoreRecoveryMode>,
     snapshot_archive_path: Option<PathBuf>,
 ) -> bank_forks_utils::LoadResult {
-    let blockstore = open_blockstore(&ledger_path, access_type, wal_recovery_mode);
-    let snapshot_path = ledger_path.join(if blockstore.is_primary_access() {
-        "snapshot"
-    } else {
-        "snapshot.ledger-tool"
-    });
+    let snapshot_path = blockstore
+        .ledger_path()
+        .join(if blockstore.is_primary_access() {
+            "snapshot"
+        } else {
+            "snapshot.ledger-tool"
+        });
     let snapshot_config = if arg_matches.is_present("no_snapshot") {
         None
     } else {
         let snapshot_package_output_path =
-            snapshot_archive_path.unwrap_or_else(|| ledger_path.to_path_buf());
+            snapshot_archive_path.unwrap_or_else(|| blockstore.ledger_path().to_path_buf());
         Some(SnapshotConfig {
             snapshot_interval_slots: 0, // Value doesn't matter
             snapshot_package_output_path,
@@ -685,9 +685,9 @@ fn load_bank_forks(
         }
         account_paths.split(',').map(PathBuf::from).collect()
     } else if blockstore.is_primary_access() {
-        vec![ledger_path.join("accounts")]
+        vec![blockstore.ledger_path().join("accounts")]
     } else {
-        let non_primary_accounts_path = ledger_path.join("accounts.ledger-tool");
+        let non_primary_accounts_path = blockstore.ledger_path().join("accounts.ledger-tool");
         warn!(
             "Default accounts path is switched aligning with Blockstore's secondary access: {:?}",
             non_primary_accounts_path
@@ -749,7 +749,7 @@ fn main() {
     let bpf_jit_arg = Arg::with_name("bpf_jit")
         .long("bpf-jit")
         .takes_value(false)
-        .help("Process with JIT instead of interpreter.");
+        .help("Process with JIT instead of interpreter");
     let no_accounts_db_caching_arg = Arg::with_name("no_accounts_db_caching")
         .long("no-accounts-db-caching")
         .takes_value(false)
@@ -832,7 +832,7 @@ fn main() {
                     "point_in_time",
                     "skip_any_corrupted_record"])
                 .help(
-                    "Mode to recovery the ledger db write ahead log."
+                    "Mode to recovery the ledger db write ahead log"
                 ),
         )
         .arg(
@@ -850,7 +850,17 @@ fn main() {
                 .global(true)
                 .takes_value(true)
                 .possible_values(&["json", "json-compact"])
-                .help("Return information in specified output format, currently only available for bigtable subcommands"),
+                .help("Return information in specified output format, \
+                       currently only available for bigtable subcommands"),
+        )
+        .arg(
+            Arg::with_name("verbose")
+                .short("v")
+                .long("verbose")
+                .global(true)
+                .multiple(true)
+                .takes_value(false)
+                .help("Show additional information where supported"),
         )
         .bigtable_subcommand()
         .subcommand(
@@ -872,14 +882,6 @@ fn main() {
                     .long("only-rooted")
                     .takes_value(false)
                     .help("Only print root slots"),
-            )
-            .arg(
-                Arg::with_name("verbose")
-                    .long("verbose")
-                    .short("v")
-                    .multiple(true)
-                    .takes_value(false)
-                    .help("How verbose to print the ledger contents."),
             )
         )
         .subcommand(
@@ -913,7 +915,7 @@ fn main() {
         .subcommand(
             SubCommand::with_name("dead-slots")
             .arg(&starting_slot_arg)
-            .about("Print all of dead slots")
+            .about("Print all the dead slots in the ledger")
         )
         .subcommand(
             SubCommand::with_name("set-dead-slot")
@@ -936,7 +938,8 @@ fn main() {
         )
         .subcommand(
             SubCommand::with_name("parse_full_frozen")
-            .about("Parses log for information about critical events about ancestors of the given `ending_slot`")
+            .about("Parses log for information about critical events about \
+                    ancestors of the given `ending_slot`")
             .arg(&starting_slot_arg)
             .arg(&ending_slot_arg)
             .arg(
@@ -993,7 +996,8 @@ fn main() {
         )
         .subcommand(
             SubCommand::with_name("bounds")
-            .about("Print lowest and highest non-empty slots. Note that there may be empty slots within the bounds")
+            .about("Print lowest and highest non-empty slots. \
+                    Note that there may be empty slots within the bounds")
             .arg(
                 Arg::with_name("all")
                     .long("all")
@@ -1028,7 +1032,7 @@ fn main() {
                 Arg::with_name("print_accounts_stats")
                     .long("print-accounts-stats")
                     .takes_value(false)
-                    .help("After verifying the ledger, print some information about the account stores."),
+                    .help("After verifying the ledger, print some information about the account stores"),
             )
         ).subcommand(
             SubCommand::with_name("graph")
@@ -1062,16 +1066,27 @@ fn main() {
                 Arg::with_name("snapshot_slot")
                     .index(1)
                     .value_name("SLOT")
-                    .validator(is_slot)
+                    .validator(|value| {
+                        if value.parse::<Slot>().is_ok()
+                            || value == "ROOT"
+                        {
+                            Ok(())
+                        } else {
+                            Err(format!(
+                                "Unable to parse as a number or the keyword ROOT, provided: {}",
+                                value
+                            ))
+                        }
+                    })
                     .takes_value(true)
-                    .help("Slot at which to create the snapshot"),
+                    .help("Slot at which to create the snapshot; accepts keyword ROOT for the highest root"),
             )
             .arg(
                 Arg::with_name("output_directory")
                     .index(2)
                     .value_name("DIR")
                     .takes_value(true)
-                    .help("Output directory for the snapshot"),
+                    .help("Output directory for the snapshot [default: --ledger directory]"),
             )
             .arg(
                 Arg::with_name("warp_slot")
@@ -1164,7 +1179,7 @@ fn main() {
                     .required(false)
                     .long("remove-stake-accounts")
                     .takes_value(false)
-                    .help("Remove all existing stake accounts from the new snapshot.")
+                    .help("Remove all existing stake accounts from the new snapshot")
             )
         ).subcommand(
             SubCommand::with_name("accounts")
@@ -1188,7 +1203,7 @@ fn main() {
             .arg(&max_genesis_archive_unpacked_size_arg)
         ).subcommand(
             SubCommand::with_name("capitalization")
-            .about("Print capitalization (aka, total suppy) while checksumming it")
+            .about("Print capitalization (aka, total supply) while checksumming it")
             .arg(&no_snapshot_arg)
             .arg(&account_paths_arg)
             .arg(&halt_at_slot_arg)
@@ -1243,7 +1258,7 @@ fn main() {
             )
         ).subcommand(
             SubCommand::with_name("purge")
-            .about("Delete a range of slots from the ledger.")
+            .about("Delete a range of slots from the ledger")
             .arg(
                 Arg::with_name("start_slot")
                     .index(1)
@@ -1256,7 +1271,8 @@ fn main() {
                 Arg::with_name("end_slot")
                     .index(2)
                     .value_name("SLOT")
-                    .help("Ending slot to stop purging (inclusive) [default: the highest slot in the ledger]"),
+                    .help("Ending slot to stop purging (inclusive) \
+                           [default: the highest slot in the ledger]"),
             )
             .arg(
                 Arg::with_name("batch_size")
@@ -1283,7 +1299,8 @@ fn main() {
         )
         .subcommand(
             SubCommand::with_name("list-roots")
-            .about("Output upto last <num-roots> root hashes and their heights starting at the given block height")
+            .about("Output up to last <num-roots> root hashes and their \
+                    heights starting at the given block height")
             .arg(
                 Arg::with_name("max_height")
                     .long("max-height")
@@ -1292,12 +1309,20 @@ fn main() {
                     .help("Maximum block height")
             )
             .arg(
+                Arg::with_name("start_root")
+                    .long("start-root")
+                    .value_name("NUM")
+                    .takes_value(true)
+                    .help("First root to start searching from")
+            )
+            .arg(
                 Arg::with_name("slot_list")
                     .long("slot-list")
                     .value_name("FILENAME")
                     .required(false)
                     .takes_value(true)
-                    .help("The location of the output YAML file. A list of rollback slot heights and hashes will be written to the file.")
+                    .help("The location of the output YAML file. A list of \
+                           rollback slot heights and hashes will be written to the file")
             )
             .arg(
                 Arg::with_name("num_roots")
@@ -1311,7 +1336,8 @@ fn main() {
         )
         .subcommand(
             SubCommand::with_name("analyze-storage")
-                .about("Output statistics in JSON format about all column families in the ledger rocksDB")
+                .about("Output statistics in JSON format about \
+                        all column families in the ledger rocksdb")
         )
         .get_matches();
 
@@ -1349,7 +1375,7 @@ fn main() {
             let num_slots = value_t!(arg_matches, "num_slots", Slot).ok();
             let allow_dead_slots = arg_matches.is_present("allow_dead_slots");
             let only_rooted = arg_matches.is_present("only_rooted");
-            let verbose = arg_matches.occurrences_of("verbose");
+            let verbose = matches.occurrences_of("verbose");
             output_ledger(
                 open_blockstore(
                     &ledger_path,
@@ -1428,13 +1454,16 @@ fn main() {
                 ..ProcessOptions::default()
             };
             let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
-            match load_bank_forks(
-                arg_matches,
+            let blockstore = open_blockstore(
                 &ledger_path,
-                &genesis_config,
-                process_options,
                 AccessType::TryPrimaryThenSecondary,
                 wal_recovery_mode,
+            );
+            match load_bank_forks(
+                arg_matches,
+                &genesis_config,
+                &blockstore,
+                process_options,
                 snapshot_archive_path,
             ) {
                 Ok((bank_forks, _leader_schedule_cache, _snapshot_hash)) => {
@@ -1500,13 +1529,16 @@ fn main() {
                 ..ProcessOptions::default()
             };
             let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
-            match load_bank_forks(
-                arg_matches,
+            let blockstore = open_blockstore(
                 &ledger_path,
-                &genesis_config,
-                process_options,
                 AccessType::TryPrimaryThenSecondary,
                 wal_recovery_mode,
+            );
+            match load_bank_forks(
+                arg_matches,
+                &genesis_config,
+                &blockstore,
+                process_options,
                 snapshot_archive_path,
             ) {
                 Ok((bank_forks, _leader_schedule_cache, _snapshot_hash)) => {
@@ -1663,13 +1695,16 @@ fn main() {
                 open_genesis_config_by(&ledger_path, arg_matches).hash()
             );
 
-            let (bank_forks, _, _) = load_bank_forks(
-                arg_matches,
+            let blockstore = open_blockstore(
                 &ledger_path,
-                &open_genesis_config_by(&ledger_path, arg_matches),
-                process_options,
                 AccessType::TryPrimaryThenSecondary,
                 wal_recovery_mode,
+            );
+            let (bank_forks, _, _) = load_bank_forks(
+                arg_matches,
+                &open_genesis_config_by(&ledger_path, arg_matches),
+                &blockstore,
+                process_options,
                 snapshot_archive_path,
             )
             .unwrap_or_else(|err| {
@@ -1692,13 +1727,16 @@ fn main() {
                 ..ProcessOptions::default()
             };
 
-            match load_bank_forks(
-                arg_matches,
+            let blockstore = open_blockstore(
                 &ledger_path,
-                &open_genesis_config_by(&ledger_path, arg_matches),
-                process_options,
                 AccessType::TryPrimaryThenSecondary,
                 wal_recovery_mode,
+            );
+            match load_bank_forks(
+                arg_matches,
+                &open_genesis_config_by(&ledger_path, arg_matches),
+                &blockstore,
+                process_options,
                 snapshot_archive_path,
             ) {
                 Ok((bank_forks, _leader_schedule_cache, _snapshot_hash)) => {
@@ -1726,8 +1764,8 @@ fn main() {
             }
         }
         ("create-snapshot", Some(arg_matches)) => {
-            let snapshot_slot = value_t_or_exit!(arg_matches, "snapshot_slot", Slot);
-            let output_directory = value_t_or_exit!(arg_matches, "output_directory", String);
+            let output_directory = value_t!(arg_matches, "output_directory", PathBuf)
+                .unwrap_or_else(|_| ledger_path.clone());
             let mut warp_slot = value_t!(arg_matches, "warp_slot", Slot).ok();
             let remove_stake_accounts = arg_matches.is_present("remove_stake_accounts");
             let new_hard_forks = hardforks_of(arg_matches, "hard_forks");
@@ -1746,13 +1784,16 @@ fn main() {
                 value_t_or_exit!(arg_matches, "bootstrap_validator_stake_lamports", u64);
             let minimum_stake_lamports = StakeState::get_rent_exempt_reserve(&rent);
             if bootstrap_validator_stake_lamports < minimum_stake_lamports {
-                eprintln!("Error: insufficient --bootstrap-validator-stake-lamports.  Minimum amount is {}", minimum_stake_lamports);
+                eprintln!(
+                    "Error: insufficient --bootstrap-validator-stake-lamports. \
+                           Minimum amount is {}",
+                    minimum_stake_lamports
+                );
                 exit(1);
             }
             let bootstrap_validator_pubkeys = pubkeys_of(&arg_matches, "bootstrap_validator");
             let accounts_to_remove =
                 pubkeys_of(&arg_matches, "accounts_to_remove").unwrap_or_default();
-
             let snapshot_version =
                 arg_matches
                     .value_of("snapshot_version")
@@ -1762,20 +1803,40 @@ fn main() {
                             exit(1)
                         })
                     });
-            let process_options = ProcessOptions {
-                dev_halt_at_slot: Some(snapshot_slot),
-                new_hard_forks,
-                poh_verify: false,
-                ..ProcessOptions::default()
-            };
+
             let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
-            match load_bank_forks(
-                arg_matches,
+            let blockstore = open_blockstore(
                 &ledger_path,
-                &genesis_config,
-                process_options,
                 AccessType::TryPrimaryThenSecondary,
                 wal_recovery_mode,
+            );
+
+            let snapshot_slot = if Some("ROOT") == arg_matches.value_of("snapshot_slot") {
+                blockstore
+                    .rooted_slot_iterator(0)
+                    .expect("Failed to get rooted slot iterator")
+                    .last()
+                    .expect("Failed to get root")
+            } else {
+                value_t_or_exit!(arg_matches, "snapshot_slot", Slot)
+            };
+
+            info!(
+                "Creating snapshot of slot {} in {}",
+                snapshot_slot,
+                output_directory.display()
+            );
+
+            match load_bank_forks(
+                arg_matches,
+                &genesis_config,
+                &blockstore,
+                ProcessOptions {
+                    dev_halt_at_slot: Some(snapshot_slot),
+                    new_hard_forks,
+                    poh_verify: false,
+                    ..ProcessOptions::default()
+                },
                 snapshot_archive_path,
             ) {
                 Ok((bank_forks, _leader_schedule_cache, _snapshot_hash)) => {
@@ -1994,13 +2055,16 @@ fn main() {
             let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
             let include_sysvars = arg_matches.is_present("include_sysvars");
             let exclude_account_data = arg_matches.is_present("exclude_account_data");
-            match load_bank_forks(
-                arg_matches,
+            let blockstore = open_blockstore(
                 &ledger_path,
-                &genesis_config,
-                process_options,
                 AccessType::TryPrimaryThenSecondary,
                 wal_recovery_mode,
+            );
+            match load_bank_forks(
+                arg_matches,
+                &genesis_config,
+                &blockstore,
+                process_options,
                 snapshot_archive_path,
             ) {
                 Ok((bank_forks, _leader_schedule_cache, _snapshot_hash)) => {
@@ -2049,13 +2113,16 @@ fn main() {
                 ..ProcessOptions::default()
             };
             let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
-            match load_bank_forks(
-                arg_matches,
+            let blockstore = open_blockstore(
                 &ledger_path,
-                &genesis_config,
-                process_options,
                 AccessType::TryPrimaryThenSecondary,
                 wal_recovery_mode,
+            );
+            match load_bank_forks(
+                arg_matches,
+                &genesis_config,
+                &blockstore,
+                process_options,
                 snapshot_archive_path,
             ) {
                 Ok((bank_forks, _leader_schedule_cache, _snapshot_hash)) => {
@@ -2696,6 +2763,11 @@ fn main() {
             } else {
                 usize::MAX
             };
+            let start_root = if let Some(height) = arg_matches.value_of("start_root") {
+                Slot::from_str(height).expect("Starting root must be a number")
+            } else {
+                0
+            };
             let num_roots = if let Some(roots) = arg_matches.value_of("num_roots") {
                 usize::from_str(roots).expect("Number of roots must be a number")
             } else {
@@ -2703,7 +2775,7 @@ fn main() {
             };
 
             let iter = blockstore
-                .rooted_slot_iterator(0)
+                .rooted_slot_iterator(start_root)
                 .expect("Failed to get rooted slot");
 
             let mut slot_hash = Vec::new();

@@ -615,27 +615,61 @@ pub struct StoreAccountsTiming {
 
 #[derive(Debug, Default)]
 struct RecycleStores {
-    entries: Vec<Arc<AccountStorageEntry>>,
+    entries: Vec<(Instant, Arc<AccountStorageEntry>)>,
     total_bytes: u64,
 }
+
+// 30 min should be enough to be certain there won't be any prospective recycle uses for given
+// store entry
+// That's because it already processed ~2500 slots and ~25 passes of AccountsBackgroundService
+pub const EXPIRATION_TTL_SECONDS: u64 = 1800;
 
 impl RecycleStores {
     fn add_entry(&mut self, new_entry: Arc<AccountStorageEntry>) {
         self.total_bytes += new_entry.total_bytes();
-        self.entries.push(new_entry)
+        self.entries.push((Instant::now(), new_entry))
     }
 
-    fn iter(&self) -> std::slice::Iter<Arc<AccountStorageEntry>> {
+    fn iter(&self) -> std::slice::Iter<(Instant, Arc<AccountStorageEntry>)> {
         self.entries.iter()
     }
 
     fn add_entries(&mut self, new_entries: Vec<Arc<AccountStorageEntry>>) {
         self.total_bytes += new_entries.iter().map(|e| e.total_bytes()).sum::<u64>();
-        self.entries.extend(new_entries);
+        let now = Instant::now();
+        for new_entry in new_entries {
+            self.entries.push((now, new_entry));
+        }
+    }
+
+    fn expire_old_entries(&mut self) -> Vec<Arc<AccountStorageEntry>> {
+        let mut expired = vec![];
+        let now = Instant::now();
+        let mut expired_bytes = 0;
+        self.entries.retain(|(recycled_time, entry)| {
+            if now.duration_since(*recycled_time).as_secs() > EXPIRATION_TTL_SECONDS {
+                if Arc::strong_count(entry) >= 2 {
+                    warn!(
+                        "Expiring still in-use recycled StorageEntry anyway...: id: {} slot: {}",
+                        entry.append_vec_id(),
+                        entry.slot(),
+                    );
+                }
+                expired_bytes += entry.total_bytes();
+                expired.push(entry.clone());
+                false
+            } else {
+                true
+            }
+        });
+
+        self.total_bytes -= expired_bytes;
+
+        expired
     }
 
     fn remove_entry(&mut self, index: usize) -> Arc<AccountStorageEntry> {
-        let removed_entry = self.entries.swap_remove(index);
+        let (_added_time, removed_entry) = self.entries.swap_remove(index);
         self.total_bytes -= removed_entry.total_bytes();
         removed_entry
     }
@@ -2260,7 +2294,7 @@ impl AccountsDb {
         let mut min = std::u64::MAX;
         let mut avail = 0;
         let mut recycle_stores = self.recycle_stores.write().unwrap();
-        for (i, store) in recycle_stores.iter().enumerate() {
+        for (i, (_recycled_time, store)) in recycle_stores.iter().enumerate() {
             if Arc::strong_count(store) == 1 {
                 max = std::cmp::max(store.accounts.capacity(), max);
                 min = std::cmp::min(store.accounts.capacity(), min);
@@ -2994,6 +3028,25 @@ impl AccountsDb {
             slot_cache.report_slot_store_metrics();
         }
         self.accounts_cache.report_size();
+    }
+
+    pub fn expire_old_recycle_stores(&self) {
+        let mut recycle_stores_write_elapsed = Measure::start("recycle_stores_write_time");
+        let recycle_stores = self.recycle_stores.write().unwrap().expire_old_entries();
+        recycle_stores_write_elapsed.stop();
+
+        let mut drop_storage_entries_elapsed = Measure::start("drop_storage_entries_elapsed");
+        drop(recycle_stores);
+        drop_storage_entries_elapsed.stop();
+
+        self.clean_accounts_stats
+            .purge_stats
+            .drop_storage_entries_elapsed
+            .fetch_add(drop_storage_entries_elapsed.as_us(), Ordering::Relaxed);
+        self.clean_accounts_stats
+            .purge_stats
+            .recycle_stores_write_elapsed
+            .fetch_add(recycle_stores_write_elapsed.as_us(), Ordering::Relaxed);
     }
 
     // `force_flush` flushes all the cached roots `<= requested_flush_root`. It also then
@@ -3946,17 +3999,22 @@ impl AccountsDb {
         &'a self,
         dead_slots_iter: impl Iterator<Item = &'a Slot> + Clone,
         purged_slot_pubkeys: HashSet<(Slot, Pubkey)>,
-        mut purged_account_slots: Option<&mut AccountSlots>,
+        // Should only be `Some` for non-cached slots
+        purged_stored_account_slots: Option<&mut AccountSlots>,
     ) {
-        for (slot, pubkey) in purged_slot_pubkeys {
-            if let Some(ref mut purged_account_slots) = purged_account_slots {
-                purged_account_slots.entry(pubkey).or_default().insert(slot);
+        if let Some(purged_stored_account_slots) = purged_stored_account_slots {
+            for (slot, pubkey) in purged_slot_pubkeys {
+                purged_stored_account_slots
+                    .entry(pubkey)
+                    .or_default()
+                    .insert(slot);
+                self.accounts_index.unref_from_storage(&pubkey);
             }
-            self.accounts_index.unref_from_storage(&pubkey);
         }
 
         let mut accounts_index_root_stats = AccountsIndexRootsStats::default();
         for slot in dead_slots_iter.clone() {
+            info!("finalize_dead_slot_removal slot {}", slot);
             if let Some(latest) = self.accounts_index.clean_dead_slot(*slot) {
                 accounts_index_root_stats = latest;
             }
@@ -4495,15 +4553,16 @@ impl AccountsDb {
         self.print_count_and_status(label);
         info!("recycle_stores:");
         let recycle_stores = self.recycle_stores.read().unwrap();
-        for entry in recycle_stores.iter() {
+        for (recycled_time, entry) in recycle_stores.iter() {
             info!(
-                "  slot: {} id: {} count_and_status: {:?} approx_store_count: {} len: {} capacity: {}",
+                "  slot: {} id: {} count_and_status: {:?} approx_store_count: {} len: {} capacity: {} (recycled: {:?})",
                 entry.slot(),
                 entry.append_vec_id(),
                 *entry.count_and_status.read().unwrap(),
                 entry.approx_store_count.load(Ordering::Relaxed),
                 entry.accounts.len(),
                 entry.accounts.capacity(),
+                recycled_time,
             );
         }
     }
@@ -8218,6 +8277,74 @@ pub mod tests {
             .is_none());
     }
 
+    #[test]
+    fn test_flush_cache_dont_clean_zero_lamport_account() {
+        let caching_enabled = true;
+        let db = Arc::new(AccountsDb::new_with_config(
+            Vec::new(),
+            &ClusterType::Development,
+            HashSet::new(),
+            caching_enabled,
+        ));
+
+        let zero_lamport_account_key = Pubkey::new_unique();
+        let other_account_key = Pubkey::new_unique();
+
+        let original_lamports = 1;
+        let slot0_account = Account::new(original_lamports, 1, &Account::default().owner);
+        let zero_lamport_account = Account::new(0, 0, &Account::default().owner);
+
+        // Store into slot 0, and then flush the slot to storage
+        db.store_cached(0, &[(&zero_lamport_account_key, &slot0_account)]);
+        // Second key keeps other lamport account entry for slot 0 alive,
+        // preventing clean of the zero_lamport_account in slot 1.
+        db.store_cached(0, &[(&other_account_key, &slot0_account)]);
+        db.add_root(0);
+        db.flush_accounts_cache(true, None);
+        assert!(!db.storage.get_slot_storage_entries(0).unwrap().is_empty());
+
+        // Store into slot 1, a dummy slot that will be dead and purged before flush
+        db.store_cached(1, &[(&zero_lamport_account_key, &zero_lamport_account)]);
+
+        // Store into slot 2, which makes all updates from slot 1 outdated.
+        // This means slot 1 is a dead slot. Later, slot 1 will be cleaned/purged
+        // before it even reaches storage, but this purge of slot 1should not affect
+        // the refcount of `zero_lamport_account_key` because cached keys do not bump
+        // the refcount in the index. This means clean should *not* remove
+        // `zero_lamport_account_key` from slot 2
+        db.store_cached(2, &[(&zero_lamport_account_key, &zero_lamport_account)]);
+        db.add_root(1);
+        db.add_root(2);
+
+        // Flush, then clean. Should not need another root to initiate the cleaning
+        // because `accounts_index.uncleaned_roots` should be correct
+        db.flush_accounts_cache(true, None);
+        db.clean_accounts(None);
+
+        // The `zero_lamport_account_key` is still alive in slot 1, so refcount for the
+        // pubkey should be 2
+        assert_eq!(
+            db.accounts_index
+                .ref_count_from_storage(&zero_lamport_account_key),
+            2
+        );
+        assert_eq!(
+            db.accounts_index.ref_count_from_storage(&other_account_key),
+            1
+        );
+
+        // The zero-lamport account in slot 2 should not be purged yet, because the
+        // entry in slot 1 is blocking cleanup of the zero-lamport account.
+        let max_root = None;
+        assert_eq!(
+            db.do_load(&Ancestors::default(), &zero_lamport_account_key, max_root,)
+                .unwrap()
+                .0
+                .lamports,
+            0
+        );
+    }
+
     struct ScanTracker {
         t_scan: JoinHandle<()>,
         exit: Arc<AtomicBool>,
@@ -8935,5 +9062,75 @@ pub mod tests {
 
         assert!(slot_stores(&db, 0).is_empty());
         assert!(!slot_stores(&db, 1).is_empty());
+    }
+
+    #[test]
+    fn test_recycle_stores_expiration() {
+        solana_logger::setup();
+
+        let dummy_path = Path::new("");
+        let dummy_slot = 12;
+        let dummy_size = 1000;
+
+        let dummy_id1 = 22;
+        let entry1 = Arc::new(AccountStorageEntry::new(
+            &dummy_path,
+            dummy_slot,
+            dummy_id1,
+            dummy_size,
+        ));
+
+        let dummy_id2 = 44;
+        let entry2 = Arc::new(AccountStorageEntry::new(
+            &dummy_path,
+            dummy_slot,
+            dummy_id2,
+            dummy_size,
+        ));
+
+        let mut recycle_stores = RecycleStores::default();
+        recycle_stores.add_entry(entry1);
+        recycle_stores.add_entry(entry2);
+        assert_eq!(recycle_stores.entry_count(), 2);
+
+        // no expiration for newly added entries
+        let expired = recycle_stores.expire_old_entries();
+        assert_eq!(
+            expired
+                .iter()
+                .map(|e| e.append_vec_id())
+                .collect::<Vec<_>>(),
+            Vec::<AppendVecId>::new()
+        );
+        assert_eq!(
+            recycle_stores
+                .iter()
+                .map(|(_, e)| e.append_vec_id())
+                .collect::<Vec<_>>(),
+            vec![dummy_id1, dummy_id2]
+        );
+        assert_eq!(recycle_stores.entry_count(), 2);
+        assert_eq!(recycle_stores.total_bytes(), dummy_size * 2);
+
+        // expiration for only too old entries
+        recycle_stores.entries[0].0 =
+            Instant::now() - Duration::from_secs(EXPIRATION_TTL_SECONDS + 1);
+        let expired = recycle_stores.expire_old_entries();
+        assert_eq!(
+            expired
+                .iter()
+                .map(|e| e.append_vec_id())
+                .collect::<Vec<_>>(),
+            vec![dummy_id1]
+        );
+        assert_eq!(
+            recycle_stores
+                .iter()
+                .map(|(_, e)| e.append_vec_id())
+                .collect::<Vec<_>>(),
+            vec![dummy_id2]
+        );
+        assert_eq!(recycle_stores.entry_count(), 1);
+        assert_eq!(recycle_stores.total_bytes(), dummy_size);
     }
 }

@@ -1,5 +1,5 @@
 use crate::StoredExtendedRewards;
-use solana_account_decoder::parse_token::{real_number_string_trimmed, UiTokenAmount};
+use solana_account_decoder::parse_token::UiTokenAmount;
 use solana_sdk::{
     hash::Hash,
     instruction::CompiledInstruction,
@@ -14,10 +14,7 @@ use solana_transaction_status::{
     ConfirmedBlock, InnerInstructions, Reward, RewardType, TransactionByAddrInfo,
     TransactionStatusMeta, TransactionTokenBalance, TransactionWithStatusMeta,
 };
-use std::{
-    convert::{TryFrom, TryInto},
-    str::FromStr,
-};
+use std::convert::{TryFrom, TryInto};
 
 pub mod generated {
     include!(concat!(
@@ -386,10 +383,9 @@ impl From<TransactionTokenBalance> for generated::TokenBalance {
             account_index: value.account_index as u32,
             mint: value.mint,
             ui_token_amount: Some(generated::UiTokenAmount {
+                ui_amount: value.ui_token_amount.ui_amount,
                 decimals: value.ui_token_amount.decimals as u32,
                 amount: value.ui_token_amount.amount,
-                ui_amount_string: value.ui_token_amount.ui_amount,
-                ..generated::UiTokenAmount::default()
             }),
         }
     }
@@ -402,14 +398,7 @@ impl From<generated::TokenBalance> for TransactionTokenBalance {
             account_index: value.account_index as u8,
             mint: value.mint,
             ui_token_amount: UiTokenAmount {
-                ui_amount: if !ui_token_amount.ui_amount_string.is_empty() {
-                    ui_token_amount.ui_amount_string
-                } else {
-                    real_number_string_trimmed(
-                        u64::from_str(&ui_token_amount.amount).unwrap_or(0),
-                        ui_token_amount.decimals as u8,
-                    )
-                },
+                ui_amount: ui_token_amount.ui_amount,
                 decimals: ui_token_amount.decimals as u8,
                 amount: ui_token_amount.amount,
             },
@@ -494,6 +483,9 @@ impl TryFrom<tx_by_addr::TransactionError> for TransactionError {
                     41 => InstructionError::ProgramFailedToCompile,
                     42 => InstructionError::Immutable,
                     43 => InstructionError::IncorrectAuthority,
+                    44 => InstructionError::BorshIoError(String::new()),
+                    45 => InstructionError::AccountNotRentExempt,
+                    46 => InstructionError::InvalidAccountOwner,
                     _ => return Err("Invalid InstructionError"),
                 };
 
@@ -716,6 +708,9 @@ impl From<TransactionError> for tx_by_addr::TransactionError {
                             }
                             InstructionError::AccountNotRentExempt => {
                                 tx_by_addr::InstructionErrorType::AccountNotRentExempt
+                            }
+                            InstructionError::InvalidAccountOwner => {
+                                tx_by_addr::InstructionErrorType::InvalidAccountOwner
                             }
                         } as i32,
                         custom: match instruction_error {

@@ -131,8 +131,23 @@ pub enum StakeInstruction {
     ///   1. [SIGNER] Lockup authority
     SetLockup(LockupArgs),
 
-    /// Merge two stake accounts. Both accounts must be deactivated and have identical lockup and
-    /// authority keys.
+    /// Merge two stake accounts.
+    ///
+    /// Both accounts must have identical lockup and authority keys. A merge
+    /// is possible between two stakes in the following states with no additional
+    /// conditions:
+    ///
+    /// * two deactivated stakes
+    /// * an inactive stake into an activating stake during its activation epoch
+    ///
+    /// For the following cases, the voter pubkey and vote credits observed must match:
+    ///
+    /// * two activated stakes
+    /// * two activating accounts that share an activation epoch, during the activation epoch
+    ///
+    /// All other combinations of stake states will fail to merge, including all
+    /// "transient" states, where a stake is activating or deactivating with a
+    /// non-zero effective stake.
     ///
     /// # Account references
     ///   0. [WRITE] Destination stake account for the merge
@@ -481,7 +496,11 @@ pub fn process_instruction(
     let me = &next_keyed_account(keyed_accounts)?;
 
     if me.owner()? != id() {
-        return Err(InstructionError::IncorrectProgramId);
+        if invoke_context.is_feature_active(&feature_set::check_program_owner::id()) {
+            return Err(InstructionError::InvalidAccountOwner);
+        } else {
+            return Err(InstructionError::IncorrectProgramId);
+        }
     }
 
     match limited_deserialize(data)? {
@@ -787,7 +806,7 @@ mod tests {
                 &Authorized::default(),
                 &Lockup::default()
             )),
-            Err(InstructionError::IncorrectProgramId),
+            Err(InstructionError::InvalidAccountOwner),
         );
         assert_eq!(
             process_instruction(&authorize(
@@ -797,7 +816,7 @@ mod tests {
                 StakeAuthorize::Staker,
                 None,
             )),
-            Err(InstructionError::IncorrectProgramId),
+            Err(InstructionError::InvalidAccountOwner),
         );
         assert_eq!(
             process_instruction(
@@ -808,7 +827,7 @@ mod tests {
                     &Pubkey::default(),
                 )[1]
             ),
-            Err(InstructionError::IncorrectProgramId),
+            Err(InstructionError::InvalidAccountOwner),
         );
         assert_eq!(
             process_instruction(
@@ -829,7 +848,7 @@ mod tests {
                     &Pubkey::default(),
                 )[0]
             ),
-            Err(InstructionError::IncorrectProgramId),
+            Err(InstructionError::InvalidAccountOwner),
         );
         assert_eq!(
             process_instruction(
@@ -852,7 +871,7 @@ mod tests {
                     "seed"
                 )[1]
             ),
-            Err(InstructionError::IncorrectProgramId),
+            Err(InstructionError::InvalidAccountOwner),
         );
         assert_eq!(
             process_instruction(&delegate_stake(
@@ -860,7 +879,7 @@ mod tests {
                 &Pubkey::default(),
                 &Pubkey::default(),
             )),
-            Err(InstructionError::IncorrectProgramId),
+            Err(InstructionError::InvalidAccountOwner),
         );
         assert_eq!(
             process_instruction(&withdraw(
@@ -870,14 +889,14 @@ mod tests {
                 100,
                 None,
             )),
-            Err(InstructionError::IncorrectProgramId),
+            Err(InstructionError::InvalidAccountOwner),
         );
         assert_eq!(
             process_instruction(&deactivate_stake(
                 &spoofed_stake_state_pubkey(),
                 &Pubkey::default()
             )),
-            Err(InstructionError::IncorrectProgramId),
+            Err(InstructionError::InvalidAccountOwner),
         );
         assert_eq!(
             process_instruction(&set_lockup(
@@ -885,7 +904,7 @@ mod tests {
                 &LockupArgs::default(),
                 &Pubkey::default()
             )),
-            Err(InstructionError::IncorrectProgramId),
+            Err(InstructionError::InvalidAccountOwner),
         );
     }
 
