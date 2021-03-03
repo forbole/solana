@@ -3,8 +3,6 @@ name = "bd-solana-wasm"
 version = "0.1.0"
 description = "Solana WASM for Big Dipper"
 authors = ["Paul <p22626262@gmail.com>"]
-repository = "https://github.com/solana-labs/solana"
-homepage = "https://solana.com/"
 edition = "2018"
 resolver = "2"
 
