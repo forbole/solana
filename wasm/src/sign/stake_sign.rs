@@ -242,12 +242,12 @@ pub fn authorize_stake(
     ));
     let authority_pubkey = authority_keypair.pubkey();
     let source_pubkey = jserr!(Pubkey::from_str(source));
-    let new_authoriy_pubkey = jserr!(Pubkey::from_str(new_authority));
+    let new_authority_pubkey = jserr!(Pubkey::from_str(new_authority));
     let stake_authorize = StakeAuthorizeInput::into(&authorize_type);
     let instructions = vec![stake_instruction::authorize(
         &source_pubkey,
         &authority_pubkey,
-        &new_authoriy_pubkey,
+        &new_authority_pubkey,
         stake_authorize,
         None,
     )];

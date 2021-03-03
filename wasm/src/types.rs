@@ -43,7 +43,7 @@ impl SignerConfig {
     }
 
     #[wasm_bindgen(setter)]
-    pub fn set_passhprase(&mut self, passphrase: &str) {
+    pub fn set_passphrase(&mut self, passphrase: &str) {
         self.passphrase = passphrase.to_string();
     }
 

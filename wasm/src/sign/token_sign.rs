@@ -298,7 +298,7 @@ pub fn set_spl_authority(
     let authority_pubkey = authority_keypair.pubkey();
     let source_pubkey = jserr!(Pubkey::from_str(source));
     // spl token authority can be none
-    let new_authoriy_pubkey = match Pubkey::from_str(new_authority) {
+    let new_authority_pubkey = match Pubkey::from_str(new_authority) {
         Ok(pubkey) => Some(pubkey),
         Err(_) => None,
     };
@@ -306,7 +306,7 @@ pub fn set_spl_authority(
     let instructions = vec![jserr!(spl_token_instruction::set_authority(
         &spl_token::id(),
         &source_pubkey,
-        new_authoriy_pubkey.as_ref(),
+        new_authority_pubkey.as_ref(),
         authority_type,
         &authority_pubkey,
         &[],
@@ -321,7 +321,7 @@ pub fn set_spl_authority(
     Ok(encoded)
 }
 
-#[wasm_bindgen(js_name = "freezeTokenAcount")]
+#[wasm_bindgen(js_name = "freezeTokenAccount")]
 pub fn freeze_token_account(
     config: &SignerConfig,
     mint: &str,
@@ -351,7 +351,7 @@ pub fn freeze_token_account(
     Ok(encoded)
 }
 
-#[wasm_bindgen(js_name = "thawTokenAcount")]
+#[wasm_bindgen(js_name = "thawTokenAccount")]
 pub fn thaw_token_account(
     config: &SignerConfig,
     mint: &str,
@@ -381,7 +381,7 @@ pub fn thaw_token_account(
     Ok(encoded)
 }
 
-#[wasm_bindgen(js_name = "closeTokenAcount")]
+#[wasm_bindgen(js_name = "closeTokenAccount")]
 pub fn close_token_account(
     config: &SignerConfig,
     token_account: &str,

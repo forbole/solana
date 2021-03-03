@@ -24,8 +24,8 @@ pub fn generate_key(passphrase: Option<String>) -> Result<JsValue, JsValue> {
     Ok(jserr!(JsValue::from_serde(&pubkey_and_passphrase)))
 }
 
-#[wasm_bindgen(js_name = "getPubkeyFromPhrase")]
-pub fn get_pubkey_from_phrase(config: &SignerConfig) -> Result<String, JsValue> {
+#[wasm_bindgen(js_name = "getPubkeyFromConfig")]
+pub fn get_pubkey_from_config(config: &SignerConfig) -> Result<String, JsValue> {
     let keypair = jserr!(keypair_from_seed_phrase_and_passphrase(
         &config.phrase().as_ref(),
         &config.passphrase().as_ref()
@@ -46,7 +46,7 @@ mod test{
     #[wasm_bindgen_test]
     fn test_get_pubkey_from_phrase() {
         let config = SignerConfig::new(BLOCKHASH, PHRASE, PASSPHRASE, None);
-        let pubkey = get_pubkey_from_phrase(&config).unwrap();
+        let pubkey = get_pubkey_from_config(&config).unwrap();
         assert_eq!(&pubkey, "6xKtnsnabAsPXRbA6sd7GYQBSb4HFbuiEebJwkL1ecrz");
         
     }

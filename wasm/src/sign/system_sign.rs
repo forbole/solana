@@ -103,11 +103,11 @@ pub fn authorize_nonce(
     ));
     let authority_pubkey = authority_keypair.pubkey();
     let nonce_pubkey = jserr!(Pubkey::from_str(nonce_account));
-    let new_authoriy_pubkey = jserr!(Pubkey::from_str(new_authority));
+    let new_authority_pubkey = jserr!(Pubkey::from_str(new_authority));
     let instructions = vec![system_instruction::authorize_nonce_account(
         &nonce_pubkey,
         &authority_pubkey,
-        &new_authoriy_pubkey,
+        &new_authority_pubkey,
     )];
     let signers = [&authority_keypair];
     let encoded = jserr!(generate_encoded_transaction(
