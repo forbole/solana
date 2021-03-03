@@ -53,8 +53,8 @@ impl SignerConfig {
     }
 
     #[wasm_bindgen(setter)]
-    pub fn set_blockhash(&mut self, bockhash: &str) {
-        self.blockhash = bockhash.to_string();
+    pub fn set_blockhash(&mut self, blockhash: &str) {
+        self.blockhash = blockhash.to_string();
     }
 
     #[wasm_bindgen(getter)]
