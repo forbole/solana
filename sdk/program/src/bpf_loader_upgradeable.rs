@@ -100,7 +100,7 @@ pub fn create_buffer(
             UpgradeableLoaderState::buffer_len(program_len)? as u64,
             &id(),
         ),
-        Instruction::new(
+        Instruction::new_with_bincode(
             id(),
             &UpgradeableLoaderInstruction::InitializeBuffer,
             vec![
@@ -119,7 +119,7 @@ pub fn write(
     offset: u32,
     bytes: Vec<u8>,
 ) -> Instruction {
-    Instruction::new(
+    Instruction::new_with_bincode(
         id(),
         &UpgradeableLoaderInstruction::Write { offset, bytes },
         vec![
@@ -149,7 +149,7 @@ pub fn deploy_with_max_program_len(
             UpgradeableLoaderState::program_len()? as u64,
             &id(),
         ),
-        Instruction::new(
+        Instruction::new_with_bincode(
             id(),
             &UpgradeableLoaderInstruction::DeployWithMaxDataLen { max_data_len },
             vec![
@@ -174,7 +174,7 @@ pub fn upgrade(
     spill_address: &Pubkey,
 ) -> Instruction {
     let (programdata_address, _) = Pubkey::find_program_address(&[program_address.as_ref()], &id());
-    Instruction::new(
+    Instruction::new_with_bincode(
         id(),
         &UpgradeableLoaderInstruction::Upgrade,
         vec![
@@ -199,7 +199,7 @@ pub fn set_buffer_authority(
     current_authority_address: &Pubkey,
     new_authority_address: &Pubkey,
 ) -> Instruction {
-    Instruction::new(
+    Instruction::new_with_bincode(
         id(),
         &UpgradeableLoaderInstruction::SetAuthority,
         vec![
@@ -225,7 +225,7 @@ pub fn set_upgrade_authority(
     if let Some(address) = new_authority_address {
         metas.push(AccountMeta::new_readonly(*address, false));
     }
-    Instruction::new(id(), &UpgradeableLoaderInstruction::SetAuthority, metas)
+    Instruction::new_with_bincode(id(), &UpgradeableLoaderInstruction::SetAuthority, metas)
 }
 
 #[cfg(test)]

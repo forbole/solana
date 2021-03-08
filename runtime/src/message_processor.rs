@@ -52,6 +52,31 @@ impl Executors {
     }
 }
 
+#[derive(Default, Debug)]
+pub struct ExecuteDetailsTimings {
+    pub serialize_us: u64,
+    pub create_vm_us: u64,
+    pub execute_us: u64,
+    pub deserialize_us: u64,
+    pub changed_account_count: u64,
+    pub total_account_count: u64,
+    pub total_data_size: usize,
+    pub data_size_changed: usize,
+}
+
+impl ExecuteDetailsTimings {
+    pub fn accumulate(&mut self, other: &ExecuteDetailsTimings) {
+        self.serialize_us += other.serialize_us;
+        self.create_vm_us += other.create_vm_us;
+        self.execute_us += other.execute_us;
+        self.deserialize_us += other.deserialize_us;
+        self.changed_account_count += other.changed_account_count;
+        self.total_account_count += other.total_account_count;
+        self.total_data_size += other.total_data_size;
+        self.data_size_changed += other.data_size_changed;
+    }
+}
+
 // The relevant state of an account before an Instruction executes, used
 // to verify account integrity after the Instruction completes
 #[derive(Clone, Debug, Default)]
@@ -59,6 +84,7 @@ pub struct PreAccount {
     key: Pubkey,
     is_writable: bool,
     account: RefCell<Account>,
+    changed: bool,
 }
 impl PreAccount {
     pub fn new(key: &Pubkey, account: &Account, is_writable: bool) -> Self {
@@ -66,6 +92,7 @@ impl PreAccount {
             key: *key,
             is_writable,
             account: RefCell::new(account.clone()),
+            changed: false,
         }
     }
 
@@ -75,6 +102,7 @@ impl PreAccount {
         is_writable: Option<bool>,
         rent: &Rent,
         post: &Account,
+        timings: &mut ExecuteDetailsTimings,
     ) -> Result<(), InstructionError> {
         let pre = self.account.borrow();
 
@@ -88,7 +116,8 @@ impl PreAccount {
         //   only if the account is writable and
         //   only if the account is not executable and
         //   only if the data is zero-initialized or empty
-        if pre.owner != post.owner
+        let owner_changed = pre.owner != post.owner;
+        if owner_changed
             && (!is_writable // line coverage used to get branch coverage
                 || pre.executable
                 || *program_id != pre.owner
@@ -105,7 +134,8 @@ impl PreAccount {
         }
 
         // The balance of read-only and executable accounts may not change
-        if pre.lamports != post.lamports {
+        let lamports_changed = pre.lamports != post.lamports;
+        if lamports_changed {
             if !is_writable {
                 return Err(InstructionError::ReadonlyLamportChange);
             }
@@ -116,7 +146,8 @@ impl PreAccount {
 
         // Only the system program can change the size of the data
         //  and only if the system program owns the account
-        if pre.data.len() != post.data.len()
+        let data_len_changed = pre.data.len() != post.data.len();
+        if data_len_changed
             && (!system_program::check_id(program_id) // line coverage used to get branch coverage
                 || !system_program::check_id(&pre.owner))
         {
@@ -141,7 +172,8 @@ impl PreAccount {
         }
 
         // executable is one-way (false->true) and only the account owner may set it.
-        if pre.executable != post.executable {
+        let executable_changed = pre.executable != post.executable;
+        if executable_changed {
             if !rent.is_exempt(post.lamports, post.data.len()) {
                 return Err(InstructionError::ExecutableAccountNotRentExempt);
             }
@@ -154,8 +186,22 @@ impl PreAccount {
         }
 
         // No one modifies rent_epoch (yet).
-        if pre.rent_epoch != post.rent_epoch {
+        let rent_epoch_changed = pre.rent_epoch != post.rent_epoch;
+        if rent_epoch_changed {
             return Err(InstructionError::RentEpochModified);
+        }
+
+        timings.total_account_count += 1;
+        timings.total_data_size += post.data.len();
+        if owner_changed
+            || lamports_changed
+            || data_len_changed
+            || executable_changed
+            || rent_epoch_changed
+            || self.changed
+        {
+            timings.changed_account_count += 1;
+            timings.data_size_changed += post.data.len();
         }
 
         Ok(())
@@ -174,6 +220,8 @@ impl PreAccount {
             // Copy without allocate
             pre.data.clone_from_slice(&account.data);
         }
+
+        self.changed = true;
     }
 
     pub fn key(&self) -> Pubkey {
@@ -222,6 +270,7 @@ pub struct ThisInvokeContext<'a> {
     executors: Rc<RefCell<Executors>>,
     instruction_recorder: Option<InstructionRecorder>,
     feature_set: Arc<FeatureSet>,
+    pub timings: ExecuteDetailsTimings,
 }
 impl<'a> ThisInvokeContext<'a> {
     #[allow(clippy::too_many_arguments)]
@@ -253,6 +302,7 @@ impl<'a> ThisInvokeContext<'a> {
             executors,
             instruction_recorder,
             feature_set,
+            timings: ExecuteDetailsTimings::default(),
         }
     }
 }
@@ -293,6 +343,7 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
                 &self.rent,
                 track_writable_deescalation,
                 caller_privileges,
+                &mut self.timings,
             ),
             None => Err(InstructionError::GenericError), // Should never happen
         }
@@ -345,6 +396,18 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
                 None
             }
         })
+    }
+    fn update_timing(
+        &mut self,
+        serialize_us: u64,
+        create_vm_us: u64,
+        execute_us: u64,
+        deserialize_us: u64,
+    ) {
+        self.timings.serialize_us += serialize_us;
+        self.timings.create_vm_us += create_vm_us;
+        self.timings.execute_us += execute_us;
+        self.timings.deserialize_us += deserialize_us;
     }
 }
 pub struct ThisLogger {
@@ -569,7 +632,7 @@ impl MessageProcessor {
             ) {
                 ic_msg!(
                     invoke_context,
-                    "{}'s signer priviledge escalated",
+                    "{}'s signer privilege escalated",
                     account.pubkey
                 );
                 return Err(InstructionError::PrivilegeEscalation);
@@ -836,6 +899,7 @@ impl MessageProcessor {
         executable_accounts: &[(Pubkey, RefCell<Account>)],
         accounts: &[Rc<RefCell<Account>>],
         rent: &Rent,
+        timings: &mut ExecuteDetailsTimings,
     ) -> Result<(), InstructionError> {
         // Verify all executable accounts have zero outstanding refs
         Self::verify_account_references(executable_accounts)?;
@@ -854,6 +918,7 @@ impl MessageProcessor {
                     Some(message.is_writable(account_index)),
                     rent,
                     &account,
+                    timings,
                 )?;
                 pre_sum += u128::from(pre_accounts[unique_index].lamports());
                 post_sum += u128::from(account.lamports);
@@ -879,6 +944,7 @@ impl MessageProcessor {
         rent: &Rent,
         track_writable_deescalation: bool,
         caller_privileges: Option<&[bool]>,
+        timings: &mut ExecuteDetailsTimings,
     ) -> Result<(), InstructionError> {
         // Verify the per-account instruction results
         let (mut pre_sum, mut post_sum) = (0_u128, 0_u128);
@@ -903,7 +969,7 @@ impl MessageProcessor {
                             .try_borrow_mut()
                             .map_err(|_| InstructionError::AccountBorrowOutstanding)?;
 
-                        pre_account.verify(&program_id, is_writable, &rent, &account)?;
+                        pre_account.verify(&program_id, is_writable, &rent, &account, timings)?;
                         pre_sum += u128::from(pre_account.lamports());
                         post_sum += u128::from(account.lamports);
 
@@ -944,6 +1010,7 @@ impl MessageProcessor {
         instruction_index: usize,
         feature_set: Arc<FeatureSet>,
         bpf_compute_budget: BpfComputeBudget,
+        timings: &mut ExecuteDetailsTimings,
     ) -> Result<(), InstructionError> {
         // Fixup the special instructions key if present
         // before the account pre-values are taken care of
@@ -989,7 +1056,11 @@ impl MessageProcessor {
             executable_accounts,
             accounts,
             &rent_collector.rent,
+            timings,
         )?;
+
+        timings.accumulate(&invoke_context.timings);
+
         Ok(())
     }
 
@@ -1009,6 +1080,7 @@ impl MessageProcessor {
         instruction_recorders: Option<&[InstructionRecorder]>,
         feature_set: Arc<FeatureSet>,
         bpf_compute_budget: BpfComputeBudget,
+        timings: &mut ExecuteDetailsTimings,
     ) -> Result<(), TransactionError> {
         for (instruction_index, instruction) in message.instructions.iter().enumerate() {
             let instruction_recorder = instruction_recorders
@@ -1027,6 +1099,7 @@ impl MessageProcessor {
                 instruction_index,
                 feature_set.clone(),
                 bpf_compute_budget,
+                timings,
             )
             .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
         }
@@ -1097,7 +1170,11 @@ mod tests {
                 AccountMeta::new(keys[owned_index], false),
             ];
             let message = Message::new(
-                &[Instruction::new(program_ids[owned_index], &[0_u8], metas)],
+                &[Instruction::new_with_bytes(
+                    program_ids[owned_index],
+                    &[0],
+                    metas,
+                )],
                 None,
             );
 
@@ -1247,6 +1324,7 @@ mod tests {
                 Some(self.is_writable),
                 &self.rent,
                 &self.post,
+                &mut ExecuteDetailsTimings::default(),
             )
         }
     }
@@ -1627,7 +1705,7 @@ mod tests {
             AccountMeta::new_readonly(to_pubkey, false),
         ];
         let message = Message::new(
-            &[Instruction::new(
+            &[Instruction::new_with_bincode(
                 mock_system_program_id,
                 &MockSystemInstruction::Correct,
                 account_metas.clone(),
@@ -1646,13 +1724,14 @@ mod tests {
             None,
             Arc::new(FeatureSet::all_enabled()),
             BpfComputeBudget::new(),
+            &mut ExecuteDetailsTimings::default(),
         );
         assert_eq!(result, Ok(()));
         assert_eq!(accounts[0].borrow().lamports, 100);
         assert_eq!(accounts[1].borrow().lamports, 0);
 
         let message = Message::new(
-            &[Instruction::new(
+            &[Instruction::new_with_bincode(
                 mock_system_program_id,
                 &MockSystemInstruction::AttemptCredit { lamports: 50 },
                 account_metas.clone(),
@@ -1671,6 +1750,7 @@ mod tests {
             None,
             Arc::new(FeatureSet::all_enabled()),
             BpfComputeBudget::new(),
+            &mut ExecuteDetailsTimings::default(),
         );
         assert_eq!(
             result,
@@ -1681,7 +1761,7 @@ mod tests {
         );
 
         let message = Message::new(
-            &[Instruction::new(
+            &[Instruction::new_with_bincode(
                 mock_system_program_id,
                 &MockSystemInstruction::AttemptDataChange { data: 50 },
                 account_metas,
@@ -1700,6 +1780,7 @@ mod tests {
             None,
             Arc::new(FeatureSet::all_enabled()),
             BpfComputeBudget::new(),
+            &mut ExecuteDetailsTimings::default(),
         );
         assert_eq!(
             result,
@@ -1795,7 +1876,7 @@ mod tests {
 
         // Try to borrow mut the same account
         let message = Message::new(
-            &[Instruction::new(
+            &[Instruction::new_with_bincode(
                 mock_program_id,
                 &MockSystemInstruction::BorrowFail,
                 account_metas.clone(),
@@ -1813,6 +1894,7 @@ mod tests {
             None,
             Arc::new(FeatureSet::all_enabled()),
             BpfComputeBudget::new(),
+            &mut ExecuteDetailsTimings::default(),
         );
         assert_eq!(
             result,
@@ -1824,7 +1906,7 @@ mod tests {
 
         // Try to borrow mut the same account in a safe way
         let message = Message::new(
-            &[Instruction::new(
+            &[Instruction::new_with_bincode(
                 mock_program_id,
                 &MockSystemInstruction::MultiBorrowMut,
                 account_metas.clone(),
@@ -1842,12 +1924,13 @@ mod tests {
             None,
             Arc::new(FeatureSet::all_enabled()),
             BpfComputeBudget::new(),
+            &mut ExecuteDetailsTimings::default(),
         );
         assert_eq!(result, Ok(()));
 
         // Do work on the same account but at different location in keyed_accounts[]
         let message = Message::new(
-            &[Instruction::new(
+            &[Instruction::new_with_bincode(
                 mock_program_id,
                 &MockSystemInstruction::DoWork {
                     lamports: 10,
@@ -1868,6 +1951,7 @@ mod tests {
             None,
             Arc::new(FeatureSet::all_enabled()),
             BpfComputeBudget::new(),
+            &mut ExecuteDetailsTimings::default(),
         );
         assert_eq!(result, Ok(()));
         assert_eq!(accounts[0].borrow().lamports, 80);
@@ -1961,7 +2045,7 @@ mod tests {
 
         // not owned account modified by the caller (before the invoke)
         accounts[0].borrow_mut().data[0] = 1;
-        let instruction = Instruction::new(
+        let instruction = Instruction::new_with_bincode(
             callee_program_id,
             &MockInstruction::NoopSuccess,
             metas.clone(),
@@ -1999,7 +2083,8 @@ mod tests {
         ];
 
         for case in cases {
-            let instruction = Instruction::new(callee_program_id, &case.0, metas.clone());
+            let instruction =
+                Instruction::new_with_bincode(callee_program_id, &case.0, metas.clone());
             let message = Message::new(&[instruction], None);
             let caller_privileges = message
                 .account_keys

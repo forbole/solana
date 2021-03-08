@@ -19,7 +19,7 @@ use solana_sdk::{
     account::Account,
     account_utils::StateMut,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
-    clock::{Epoch, Slot},
+    clock::Slot,
     feature_set::{self, FeatureSet},
     fee_calculator::{FeeCalculator, FeeConfig},
     genesis_config::ClusterType,
@@ -36,11 +36,6 @@ use std::{
     path::PathBuf,
     sync::{Arc, Mutex},
 };
-
-#[derive(Default, Debug, AbiExample)]
-pub(crate) struct ReadonlyLock {
-    lock_count: Mutex<u64>,
-}
 
 #[derive(Debug, Default, AbiExample)]
 pub struct AccountLocks {
@@ -88,12 +83,6 @@ impl AccountLocks {
 /// This structure handles synchronization for db
 #[derive(Default, Debug, AbiExample)]
 pub struct Accounts {
-    /// my slot
-    pub slot: Slot,
-
-    /// my epoch
-    pub epoch: Epoch,
-
     /// Single global AccountsDb
     pub accounts_db: Arc<AccountsDb>,
 
@@ -141,16 +130,13 @@ impl Accounts {
                 caching_enabled,
             )),
             account_locks: Mutex::new(AccountLocks::default()),
-            ..Self::default()
         }
     }
 
-    pub fn new_from_parent(parent: &Accounts, slot: Slot, parent_slot: Slot, epoch: Epoch) -> Self {
+    pub fn new_from_parent(parent: &Accounts, slot: Slot, parent_slot: Slot) -> Self {
         let accounts_db = parent.accounts_db.clone();
         accounts_db.set_hash(slot, parent_slot);
         Self {
-            slot,
-            epoch,
             accounts_db,
             account_locks: Mutex::new(AccountLocks::default()),
         }
@@ -160,7 +146,6 @@ impl Accounts {
         Self {
             accounts_db: Arc::new(accounts_db),
             account_locks: Mutex::new(AccountLocks::default()),
-            ..Self::default()
         }
     }
 
@@ -178,14 +163,13 @@ impl Accounts {
     }
 
     fn construct_instructions_account(message: &Message) -> Account {
-        let mut account = Account {
-            data: message.serialize_instructions(),
-            ..Account::default()
-        };
-
+        let mut data = message.serialize_instructions();
         // add room for current instruction index.
-        account.data.resize(account.data.len() + 2, 0);
-        account
+        data.resize(data.len() + 2, 0);
+        Account {
+            data,
+            ..Account::default()
+        }
     }
 
     fn load_transaction(
@@ -208,7 +192,6 @@ impl Accounts {
             let mut tx_rent: TransactionRent = 0;
             let mut accounts = Vec::with_capacity(message.account_keys.len());
             let mut account_deps = Vec::with_capacity(message.account_keys.len());
-            let rent_fix_enabled = feature_set.cumulative_rent_related_fixes_enabled();
 
             for (i, key) in message.account_keys.iter().enumerate() {
                 let account = if message.is_non_loader_key(key, i) {
@@ -229,11 +212,8 @@ impl Accounts {
                             .load(ancestors, key)
                             .map(|(mut account, _)| {
                                 if message.is_writable(i) {
-                                    let rent_due = rent_collector.collect_from_existing_account(
-                                        &key,
-                                        &mut account,
-                                        rent_fix_enabled,
-                                    );
+                                    let rent_due = rent_collector
+                                        .collect_from_existing_account(&key, &mut account);
                                     (account, rent_due)
                                 } else {
                                     (account, 0)
@@ -469,10 +449,7 @@ impl Accounts {
 
     /// Slow because lock is held for 1 operation instead of many
     pub fn load_slow(&self, ancestors: &Ancestors, pubkey: &Pubkey) -> Option<(Account, Slot)> {
-        let (account, slot) = self
-            .accounts_db
-            .load_slow(ancestors, pubkey)
-            .unwrap_or((Account::default(), self.slot));
+        let (account, slot) = self.accounts_db.load_slow(ancestors, pubkey)?;
 
         if account.lamports > 0 {
             Some((account, slot))
@@ -855,7 +832,6 @@ impl Accounts {
         rent_collector: &RentCollector,
         last_blockhash_with_fee_calculator: &(Hash, FeeCalculator),
         fix_recent_blockhashes_sysvar_delay: bool,
-        rent_fix_enabled: bool,
     ) {
         let accounts_to_store = self.collect_accounts_to_store(
             txs,
@@ -865,7 +841,6 @@ impl Accounts {
             rent_collector,
             last_blockhash_with_fee_calculator,
             fix_recent_blockhashes_sysvar_delay,
-            rent_fix_enabled,
         );
         self.accounts_db.store_cached(slot, &accounts_to_store);
     }
@@ -890,7 +865,6 @@ impl Accounts {
         rent_collector: &RentCollector,
         last_blockhash_with_fee_calculator: &(Hash, FeeCalculator),
         fix_recent_blockhashes_sysvar_delay: bool,
-        rent_fix_enabled: bool,
     ) -> Vec<(&'a Pubkey, &'a Account)> {
         let mut accounts = Vec::with_capacity(loaded.len());
         for (i, ((raccs, _nonce_rollback), (_, tx))) in loaded
@@ -959,11 +933,8 @@ impl Accounts {
                         }
                     }
                     if account.rent_epoch == 0 {
-                        loaded_transaction.rent += rent_collector.collect_from_created_account(
-                            &key,
-                            account,
-                            rent_fix_enabled,
-                        );
+                        loaded_transaction.rent +=
+                            rent_collector.collect_from_created_account(&key, account);
                     }
                     accounts.push((key, &*account));
                 }
@@ -1041,8 +1012,6 @@ pub fn update_accounts_bench(accounts: &Accounts, pubkeys: &[Pubkey], slot: u64)
 
 #[cfg(test)]
 mod tests {
-    // TODO: all the bank tests are bank specific, issue: 2194
-
     use super::*;
     use crate::rent_collector::RentCollector;
     use solana_sdk::{
@@ -1920,7 +1889,6 @@ mod tests {
             &rent_collector,
             &(Hash::default(), FeeCalculator::default()),
             true,
-            true,
         );
         assert_eq!(collected_accounts.len(), 2);
         assert!(collected_accounts
@@ -2286,7 +2254,6 @@ mod tests {
             &rent_collector,
             &(next_blockhash, FeeCalculator::default()),
             true,
-            true,
         );
         assert_eq!(collected_accounts.len(), 2);
         assert_eq!(
@@ -2396,7 +2363,6 @@ mod tests {
             loaded.as_mut_slice(),
             &rent_collector,
             &(next_blockhash, FeeCalculator::default()),
-            true,
             true,
         );
         assert_eq!(collected_accounts.len(), 1);

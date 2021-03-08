@@ -124,7 +124,7 @@ fn initialize_account(vote_pubkey: &Pubkey, vote_init: &VoteInit) -> Instruction
         AccountMeta::new_readonly(vote_init.node_pubkey, true),
     ];
 
-    Instruction::new(
+    Instruction::new_with_bincode(
         id(),
         &VoteInstruction::InitializeAccount(*vote_init),
         account_metas,
@@ -178,7 +178,7 @@ pub fn authorize(
         AccountMeta::new_readonly(*authorized_pubkey, true),
     ];
 
-    Instruction::new(
+    Instruction::new_with_bincode(
         id(),
         &VoteInstruction::Authorize(*new_authorized_pubkey, vote_authorize),
         account_metas,
@@ -196,7 +196,7 @@ pub fn update_validator_identity(
         AccountMeta::new_readonly(*authorized_withdrawer_pubkey, true),
     ];
 
-    Instruction::new(
+    Instruction::new_with_bincode(
         id(),
         &VoteInstruction::UpdateValidatorIdentity,
         account_metas,
@@ -213,7 +213,7 @@ pub fn update_commission(
         AccountMeta::new_readonly(*authorized_withdrawer_pubkey, true),
     ];
 
-    Instruction::new(
+    Instruction::new_with_bincode(
         id(),
         &VoteInstruction::UpdateCommission(commission),
         account_metas,
@@ -228,7 +228,7 @@ pub fn vote(vote_pubkey: &Pubkey, authorized_voter_pubkey: &Pubkey, vote: Vote) 
         AccountMeta::new_readonly(*authorized_voter_pubkey, true),
     ];
 
-    Instruction::new(id(), &VoteInstruction::Vote(vote), account_metas)
+    Instruction::new_with_bincode(id(), &VoteInstruction::Vote(vote), account_metas)
 }
 
 pub fn vote_switch(
@@ -244,7 +244,7 @@ pub fn vote_switch(
         AccountMeta::new_readonly(*authorized_voter_pubkey, true),
     ];
 
-    Instruction::new(
+    Instruction::new_with_bincode(
         id(),
         &VoteInstruction::VoteSwitch(vote, proof_hash),
         account_metas,
@@ -263,7 +263,7 @@ pub fn withdraw(
         AccountMeta::new_readonly(*authorized_withdrawer_pubkey, true),
     ];
 
-    Instruction::new(id(), &VoteInstruction::Withdraw(lamports), account_metas)
+    Instruction::new_with_bincode(id(), &VoteInstruction::Withdraw(lamports), account_metas)
 }
 
 fn verify_rent_exemption(

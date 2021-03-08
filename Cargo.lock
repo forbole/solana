@@ -250,6 +250,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "904dfeac50f3cdaba28fc6f57fdcddb75f49ed61346676a78c4ffe55877802fd"
 
 [[package]]
+name = "bd-solana-wasm"
+version = "0.1.0"
+dependencies = [
+ "base64 0.13.0",
+ "bincode",
+ "hex-literal",
+ "rand 0.7.3",
+ "serde",
+ "solana-program 1.6.0 (git+https://github.com/forbole/solana?branch=wasm)",
+ "solana-sdk 1.6.0 (git+https://github.com/forbole/solana?branch=wasm)",
+ "solana-stake-program 1.6.0 (git+https://github.com/forbole/solana?branch=wasm)",
+ "spl-token 3.1.0 (git+https://github.com/forbole/solana-program-library?branch=wasm)",
+ "tiny-bip39 0.8.0",
+ "wasm-bindgen",
+ "wasm-bindgen-test",
+ "wee_alloc",
+]
+
+[[package]]
 name = "bincode"
 version = "1.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1182,9 +1201,9 @@ dependencies = [
 
 [[package]]
 name = "env_logger"
-version = "0.8.2"
+version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f26ecb66b4bdca6c1409b40fb255eefc2bd4f6d135dab3c3124f80ffa2a9661e"
+checksum = "17392a012ea30ef05a610aa97dfb49496e71c9f676b27879922ea5bdf60d9d3f"
 dependencies = [
  "atty",
  "humantime 2.0.1",
@@ -1232,11 +1251,10 @@ dependencies = [
 
 [[package]]
 name = "fd-lock"
-version = "1.1.1"
+version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a15bec795244d49f5ee3024bdc6c3883fb035f7f6601d4a4821c3d5d60784454"
+checksum = "0010f02effd88c702318c5dde0463206be67495d0b4d906ba7c0a8f166cc7f06"
 dependencies = [
- "failure",
  "libc",
  "winapi 0.3.8",
 ]
@@ -1646,9 +1664,9 @@ checksum = "5af1f635ef1bc545d78392b136bfe1c9809e029023c84a3638a864a10b8819c8"
 
 [[package]]
 name = "hidapi"
-version = "1.2.3"
+version = "1.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5c6ffb97f2ec5835ec73bcea5256fc2cd57a13c5958230778ef97f11900ba661"
+checksum = "76c352a18370f7e7e47bcbfcbdc5432b8c80c705b5d751a25232c659fcf5c775"
 dependencies = [
  "cc",
  "libc",
@@ -2018,7 +2036,9 @@ dependencies = [
  "futures 0.3.8",
  "jsonrpc-core",
  "jsonrpc-pubsub",
+ "jsonrpc-server-utils",
  "log 0.4.11",
+ "parity-tokio-ipc",
  "serde",
  "serde_json",
  "tokio 0.2.22",
@@ -2075,6 +2095,21 @@ dependencies = [
  "net2",
  "parking_lot 0.11.0",
  "unicase 2.6.0",
+]
+
+[[package]]
+name = "jsonrpc-ipc-server"
+version = "17.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "14c4cd89e5ea7e7f0884e828fc35bb83591a371b92439675eae28efa66c24a97"
+dependencies = [
+ "futures 0.3.8",
+ "jsonrpc-core",
+ "jsonrpc-server-utils",
+ "log 0.4.11",
+ "parity-tokio-ipc",
+ "parking_lot 0.11.0",
+ "tower-service",
 ]
 
 [[package]]
@@ -2689,6 +2724,22 @@ dependencies = [
  "proc-macro2 1.0.24",
  "quote 1.0.6",
  "syn 1.0.60",
+]
+
+[[package]]
+name = "parity-tokio-ipc"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fd7f6c69d7687501b2205fe51ade1d7b8797bb3aa141fe5bf13dd78c0483bc89"
+dependencies = [
+ "futures 0.3.8",
+ "libc",
+ "log 0.4.11",
+ "mio-named-pipes",
+ "miow 0.3.6",
+ "rand 0.7.3",
+ "tokio 0.2.22",
+ "winapi 0.3.8",
 ]
 
 [[package]]
@@ -4158,11 +4209,13 @@ dependencies = [
  "bincode",
  "byteorder",
  "curve25519-dalek 3.0.2",
+ "log 0.4.11",
  "num-derive",
  "num-traits",
  "rand 0.7.3",
  "rand_core 0.6.2",
  "rustversion",
+ "solana-measure",
  "solana-runtime",
  "solana-sdk 1.6.0",
  "solana_rbpf",
@@ -4686,7 +4739,6 @@ version = "1.6.0"
 dependencies = [
  "clap",
  "solana-clap-utils",
- "solana-client",
  "solana-core",
  "solana-logger 1.6.0",
  "solana-net-utils",
@@ -4775,6 +4827,7 @@ dependencies = [
  "serde",
  "serde_bytes",
  "sha2 0.9.3",
+ "solana-account-decoder",
  "solana-bpf-loader-program",
  "solana-budget-program",
  "solana-frozen-abi 1.6.0",
@@ -4881,7 +4934,7 @@ version = "1.5.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d83a006d97da5514a4475141573383d3fcd71c729ff78494f96bb531cf734d21"
 dependencies = [
- "env_logger 0.8.2",
+ "env_logger 0.8.3",
  "lazy_static",
  "log 0.4.11",
 ]
@@ -4891,7 +4944,7 @@ name = "solana-logger"
 version = "1.6.0"
 source = "git+https://github.com/forbole/solana?branch=wasm#3b4de8cbf6401fa4d9a7e415bb3bf4c2b9321b1f"
 dependencies = [
- "env_logger 0.8.2",
+ "env_logger 0.8.3",
  "lazy_static",
  "log 0.4.11",
 ]
@@ -4900,7 +4953,7 @@ dependencies = [
 name = "solana-logger"
 version = "1.6.0"
 dependencies = [
- "env_logger 0.8.2",
+ "env_logger 0.8.3",
  "lazy_static",
  "log 0.4.11",
 ]
@@ -4943,7 +4996,7 @@ name = "solana-metrics"
 version = "1.6.0"
 source = "git+https://github.com/forbole/solana?branch=wasm#833aeff1b7eafb9494b9ad87e54665fd21af7f02"
 dependencies = [
- "env_logger 0.8.2",
+ "env_logger 0.8.3",
  "gethostname",
  "lazy_static",
  "log 0.4.11",
@@ -4955,7 +5008,7 @@ dependencies = [
 name = "solana-metrics"
 version = "1.6.0"
 dependencies = [
- "env_logger 0.8.2",
+ "env_logger 0.8.3",
  "gethostname",
  "lazy_static",
  "log 0.4.11",
@@ -5688,13 +5741,16 @@ dependencies = [
  "core_affinity",
  "fd-lock",
  "indicatif",
+ "jsonrpc-core",
+ "jsonrpc-core-client",
+ "jsonrpc-derive",
+ "jsonrpc-ipc-server",
+ "jsonrpc-server-utils",
  "libc",
  "log 0.4.11",
  "num_cpus",
  "rand 0.7.3",
  "serde",
- "serde_derive",
- "serde_yaml",
  "signal-hook",
  "solana-clap-utils",
  "solana-cli-config",
@@ -5781,25 +5837,6 @@ dependencies = [
  "solana-metrics 1.6.0",
  "solana-sdk 1.6.0",
  "thiserror",
-]
-
-[[package]]
-name = "solana-wasm"
-version = "0.1.0"
-dependencies = [
- "base64 0.13.0",
- "bincode",
- "hex-literal",
- "rand 0.7.3",
- "serde",
- "solana-program 1.6.0 (git+https://github.com/forbole/solana?branch=wasm)",
- "solana-sdk 1.6.0 (git+https://github.com/forbole/solana?branch=wasm)",
- "solana-stake-program 1.6.0 (git+https://github.com/forbole/solana?branch=wasm)",
- "spl-token 3.1.0 (git+https://github.com/forbole/solana-program-library?branch=wasm)",
- "tiny-bip39 0.8.0",
- "wasm-bindgen",
- "wasm-bindgen-test",
- "wee_alloc",
 ]
 
 [[package]]
