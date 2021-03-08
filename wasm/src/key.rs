@@ -12,7 +12,7 @@ pub fn generate_key(passphrase: Option<String>) -> Result<JsValue, JsValue> {
         Some(passphrase) => passphrase,
         None => "".to_string(),
     };
-    let word_count = 12;
+    let word_count = 24;
     let mnemonic_type = jserr!(MnemonicType::for_word_count(word_count));
     let language = Language::English;
     let phrase = Mnemonic::new(mnemonic_type, language).into_phrase();
